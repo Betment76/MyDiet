@@ -1,0 +1,408 @@
+// Экран подготовительного этапа — карточка с инфой + 14 дней с чекбоксами
+
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:my_diet/data/prep_plan_data.dart';
+import 'package:my_diet/data/stage_data.dart';
+import 'package:my_diet/models/stage_info.dart';
+import 'package:my_diet/services/theme_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PrepPlanScreen extends StatefulWidget {
+  final List<PrepDay> plan;
+  final VoidCallback? onBack;
+
+  const PrepPlanScreen({super.key, required this.plan, this.onBack});
+
+  @override
+  State<PrepPlanScreen> createState() => _PrepPlanScreenState();
+}
+
+class _PrepPlanScreenState extends State<PrepPlanScreen> {
+  late final List<PrepDay> _plan;
+  Set<String> _done = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _plan = widget.plan;
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString('prep_progress');
+    if (stored != null && stored.isNotEmpty) {
+      try {
+        final list = List<String>.from(jsonDecode(stored));
+        if (mounted) {
+          setState(() {
+            _done = list.toSet();
+            _loading = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _loading = false);
+      }
+    } else {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggle(String key) async {
+    setState(() {
+      if (_done.contains(key)) {
+        _done.remove(key);
+      } else {
+        _done.add(key);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('prep_progress', jsonEncode(_done.toList()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stage = StageData.stages[0];
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: ThemeProvider.headerGradient,
+            ),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 8,
+              bottom: 12,
+              left: 4,
+              right: 16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white),
+                      onPressed: () => widget.onBack?.call(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Подготовительный этап',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Text(
+                    '14 дней • отмечайте что съели',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index == 0) {
+                  return _StageInfoCard(stage: stage);
+                }
+                final dayIndex = index - 1;
+                if (dayIndex >= _plan.length) return null;
+                return _DayCard(
+                  day: _plan[dayIndex],
+                  done: _done,
+                  onToggle: _toggle,
+                );
+              },
+              childCount: _plan.length + 1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Карточка с информацией об этапе — раскрывается как ExpansionTile
+class _StageInfoCard extends StatelessWidget {
+  final StageInfo stage;
+
+  const _StageInfoCard({required this.stage});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.orange.shade200),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Center(child: Text('\u{1F3C3}', style: TextStyle(fontSize: 24))),
+        ),
+        title: Text(
+          'Подготовительный этап\nВход в кетоз',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+        subtitle: const Text('Нажмите, чтобы узнать подробнее',
+            style: TextStyle(fontSize: 12)),
+        children: [
+          Text(
+            stage.description,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (stage.allowedFoods.isNotEmpty) ...[
+            Text('Разрешённые продукты',
+                style: theme.textTheme.labelLarge?.copyWith(
+                    color: Colors.green.shade700,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            ...stage.allowedFoods.map((f) => _foodRow(
+                Icons.check_circle, Colors.green.shade400, f)),
+            const SizedBox(height: 12),
+          ],
+          if (stage.forbiddenFoods.isNotEmpty) ...[
+            Text('Запрещённые продукты',
+                style: theme.textTheme.labelLarge?.copyWith(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            ...stage.forbiddenFoods.map((f) => _foodRow(
+                Icons.cancel, Colors.red.shade400, f)),
+            const SizedBox(height: 12),
+          ],
+          if (stage.tips.isNotEmpty) ...[
+            Text('Советы',
+                style: theme.textTheme.labelLarge?.copyWith(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            ...stage.tips.map((t) => _foodRow(
+                Icons.lightbulb_outline, Colors.orange.shade400, t)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _foodRow(IconData icon, Color color, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayCard extends StatelessWidget {
+  final PrepDay day;
+  final Set<String> done;
+  final ValueChanged<String> onToggle;
+
+  const _DayCard({
+    required this.day,
+    required this.done,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final total = day.meals.length;
+    final completed = day.meals.where((m) =>
+        done.contains('day_${day.day - 1}_meal_${day.meals.indexOf(m)}')).length;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        leading: CircleAvatar(
+          radius: 18,
+          backgroundColor: completed == total
+              ? Colors.green.shade100
+              : theme.colorScheme.primaryContainer,
+          child: Text(
+            '${day.day}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: completed == total
+                  ? Colors.green.shade700
+                  : theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ),
+        title: Text(
+          '${day.day}-й день',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$completed/$total',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              completed == total
+                  ? Icons.check_circle
+                  : Icons.check_circle_outline,
+              size: 20,
+              color: completed == total
+                  ? Colors.green
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+        children: [
+          ...day.meals.map((meal) {
+            final idx = day.meals.indexOf(meal);
+            final key = 'day_${day.day - 1}_meal_$idx';
+            final isDone = done.contains(key);
+            return _MealCheckTile(
+              meal: meal,
+              isDone: isDone,
+              onChanged: (_) => onToggle(key),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _MealCheckTile extends StatelessWidget {
+  final PrepMeal meal;
+  final bool isDone;
+  final ValueChanged<bool?> onChanged;
+
+  const _MealCheckTile({
+    required this.meal,
+    required this.isDone,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final icon = switch (meal.name) {
+      'Завтрак' => Icons.wb_sunny_outlined,
+      'Обед'    => Icons.restaurant,
+      'Ужин'    => Icons.nightlight_outlined,
+      'Перекус' => Icons.apple_outlined,
+      'Перед сном' => Icons.bedtime_outlined,
+      _         => Icons.circle_outlined,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Checkbox(
+            value: isDone,
+            onChanged: onChanged,
+            visualDensity: VisualDensity.compact,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            activeColor: Colors.green,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          const SizedBox(width: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Icon(icon, size: 18, color: theme.colorScheme.primary),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    meal.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      decoration: isDone ? TextDecoration.lineThrough : null,
+                      color: isDone
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    meal.details,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
