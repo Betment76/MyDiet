@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:my_diet/data/methodology_registry.dart';
 import 'package:my_diet/data/prep_plan_data.dart';
 import 'package:my_diet/models/stage_info.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/meal_progress_service.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/purchase_verification_service.dart';
@@ -102,6 +104,15 @@ class _StagePlanScreenState extends State<StagePlanScreen> {
           mealIndex,
           methodologyId: widget.methodologyId,
         )) {
+      await AppMetricaService.reportEventWithMap(
+        AppMetricaEvents.mealCompleted,
+        {
+          'methodology_id': widget.methodologyId,
+          'stage_index': widget.stageIndex,
+          'plan_day': planDay,
+          'meal_index': mealIndex,
+        },
+      );
       await ProfileService.setStage(
         widget.stageIndex + 1,
         methodologyId: widget.methodologyId,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_diet/data/methodology_registry.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/purchase_verification_service.dart';
 import 'package:my_diet/screens/diary_screen.dart';
@@ -44,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openMethodology(int viewIndex, String methodologyId) async {
     await ProfileService.setActiveMethodology(methodologyId);
+    await AppMetricaService.reportMethodologyOpened(methodologyId);
     if (!mounted) return;
     setState(() => _methodologyView = viewIndex);
     _diaryKey.currentState?.refresh();
@@ -118,6 +120,14 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: StyledBottomNav(
         currentIndex: _selectedIndex,
         onTap: (i) {
+          const tabNames = [
+            'methodologies',
+            'diary',
+            'progress',
+            'profile',
+            'settings',
+          ];
+          AppMetricaService.reportTabSelected(tabNames[i]);
           setState(() => _selectedIndex = i);
           if (i == 1) _diaryKey.currentState?.refresh();
           if (i == 2) _progressKey.currentState?.refresh();

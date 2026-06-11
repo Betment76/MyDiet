@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_rustore_review/flutter_rustore_review.dart';
 import 'package:my_diet/constants/app_links.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Результат запроса отзыва через RuStore SDK.
@@ -35,6 +37,11 @@ class RustoreReviewService {
   ///
   /// [hint] — короткое пояснение для SnackBar, если пришлось открыть каталог.
   static Future<({RustoreReviewResult result, String? hint})> requestReview() async {
+    await AppMetricaService.reportEventWithMap(
+      AppMetricaEvents.reviewRequested,
+      {'source': 'rustore'},
+    );
+
     if (kIsWeb || !Platform.isAndroid) {
       await _openStorePage();
       return (result: RustoreReviewResult.openedStorePage, hint: null);

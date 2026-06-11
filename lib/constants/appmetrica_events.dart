@@ -1,0 +1,27 @@
+/// Имена пользовательских событий AppMetrica.
+abstract final class AppMetricaEvents {
+  static const appLaunch = 'app_launch';
+  static const appDebugLaunch = 'app_debug_launch';
+  static const disclaimerAccepted = 'disclaimer_accepted';
+  static const onboardingCompleted = 'onboarding_completed';
+  static const screenView = 'screen_view';
+  static const tabSelected = 'tab_selected';
+  static const methodologyOpened = 'methodology_opened';
+  static const paymentStarted = 'payment_started';
+  static const paymentSuccess = 'payment_success';
+  static const paymentFailed = 'payment_failed';
+  static const paymentCancelled = 'payment_cancelled';
+  static const dayUnlockDialogShown = 'day_unlock_dialog_shown';
+  static const dayUnlockedAd = 'day_unlocked_ad';
+  static const adInterstitialShown = 'ad_interstitial_shown';
+  static const adInterstitialFailed = 'ad_interstitial_failed';
+  static const backupCreated = 'backup_created';
+  static const backupRestored = 'backup_restored';
+  static const shareApp = 'share_app';
+  static const reviewRequested = 'review_requested';
+  static const purchaseRestored = 'purchase_restored';
+  static const waterLogged = 'water_logged';
+  static const mealCompleted = 'meal_completed';
+  static const weightUpdated = 'weight_updated';
+  static const premiumScreenOpened = 'premium_screen_opened';
+}

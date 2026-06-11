@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:my_diet/data/methodology_registry.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/meal_plan_generator.dart';
 import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
@@ -135,8 +136,9 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
 
   Future<void> _finishLoading() async {
     if (!mounted) return;
+    await AppMetricaService.reportOnboardingCompleted();
+    if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/home');
-  }
 
   @override
   void dispose() {

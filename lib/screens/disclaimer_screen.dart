@@ -28,6 +28,7 @@ class _DisclaimerScreenState extends State<DisclaimerScreen> {
     setState(() => _saving = true);
     await DisclaimerService.accept();
     await AppMetricaService.initialize();
+    await AppMetricaService.reportDisclaimerAccepted();
 
     if (!mounted) return;
 

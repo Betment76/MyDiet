@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:my_diet/data/stage_meal_data.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/meal_plan_generator.dart';
 import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
@@ -218,6 +220,10 @@ class DiaryScreenState extends State<DiaryScreen> {
     final dateKey = _dateKey(_selectedDate);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('water_$dateKey', newVal);
+    await AppMetricaService.reportEventWithMap(
+      AppMetricaEvents.waterLogged,
+      {'ml_added': ml, 'total_ml': newVal},
+    );
   }
 
   void _addWalk(int min) async {
@@ -237,6 +243,10 @@ class DiaryScreenState extends State<DiaryScreen> {
       _waterTotal = newWaterTotal;
     });
     await ProfileService.updateWeight(newWeight);
+    await AppMetricaService.reportEventWithMap(
+      AppMetricaEvents.weightUpdated,
+      {'weight_kg': newWeight},
+    );
     widget.onWeightChanged?.call();
   }
 

@@ -9,6 +9,8 @@ import 'package:my_diet/services/export_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
 import 'package:my_diet/widgets/common_widgets.dart';
 import 'package:my_diet/services/notification_service.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/purchase_verification_service.dart';
 
 /// Экран настроек
@@ -45,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final path = await BackupService.createBackup();
     if (!mounted) return;
     if (path != null) {
+      await AppMetricaService.reportEvent(AppMetricaEvents.backupCreated);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Резервная копия сохранена:\n$path')),
       );
@@ -66,6 +69,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await BackupService.restoreFromFile(picked);
     if (!mounted) return;
 
+    if (ok) {
+      await AppMetricaService.reportEvent(AppMetricaEvents.backupRestored);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok ? 'Данные восстановлены' : 'Ошибка восстановления'),
@@ -75,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _shareApp() async {
     await ExportService.shareApp();
+    await AppMetricaService.reportEvent(AppMetricaEvents.shareApp);
   }
 
   Future<void> _openAllApps() async {
@@ -199,6 +206,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) Navigator.of(context).pop();
 
     if (!mounted) return;
+    if (outcome.success) {
+      await AppMetricaService.reportEvent(AppMetricaEvents.purchaseRestored);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(outcome.message)),
     );

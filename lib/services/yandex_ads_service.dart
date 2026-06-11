@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/utils/ad_free_notifier.dart';
 import 'package:yandex_mobileads/mobile_ads.dart';
 
@@ -70,6 +71,10 @@ class YandexAdsService {
             if (kDebugMode) {
               debugPrint('Ошибка показа межстраничной рекламы: $error');
             }
+            AppMetricaService.reportInterstitialAdFailed(
+              adUnitId: adUnitId,
+              error: error.toString(),
+            );
             ad.destroy();
             _interstitialAd = null;
             _interstitialAdLoader = null;
@@ -78,11 +83,16 @@ class YandexAdsService {
         ),
       );
       await ad.show();
+      await AppMetricaService.reportInterstitialAd(adUnitId: adUnitId);
       await ad.waitForDismiss();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Ошибка загрузки межстраничной рекламы: $e');
       }
+      AppMetricaService.reportInterstitialAdFailed(
+        adUnitId: adUnitId,
+        error: e.toString(),
+      );
       _interstitialAd = null;
       _interstitialAdLoader = null;
       onAdDismissed?.call();
@@ -140,18 +150,27 @@ class YandexAdsService {
             if (kDebugMode) {
               debugPrint('Ошибка показа предзагруженной рекламы: $error');
             }
+            AppMetricaService.reportInterstitialAdFailed(
+              adUnitId: adUnitId,
+              error: error.toString(),
+            );
             ad.destroy();
             onAdDismissed?.call();
           },
         ),
       );
       await ad.show();
+      await AppMetricaService.reportInterstitialAd(adUnitId: adUnitId);
       await ad.waitForDismiss();
       return true;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Ошибка показа предзагруженной рекламы: $e');
       }
+      AppMetricaService.reportInterstitialAdFailed(
+        adUnitId: adUnitId,
+        error: e.toString(),
+      );
       ad.destroy();
       onAdDismissed?.call();
       return false;

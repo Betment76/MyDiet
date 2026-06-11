@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:my_diet/data/methodology_registry.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/payment_flow_service.dart';
 import 'package:my_diet/services/premium_purchase_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
@@ -44,6 +46,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
   @override
   void initState() {
     super.initState();
+    AppMetricaService.reportEvent(AppMetricaEvents.premiumScreenOpened);
     _loadPurchased();
   }
 

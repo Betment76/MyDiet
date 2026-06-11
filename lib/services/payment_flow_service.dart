@@ -6,6 +6,7 @@ import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/premium_purchase_service.dart';
 import 'package:my_diet/services/purchase_record_service.dart';
 import 'package:my_diet/services/stage_purchase_service.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/tbank_payment_service.dart';
 
 /// Запуск оплаты и разблокировка после успешного платежа.
@@ -35,6 +36,10 @@ class PaymentFlowService {
       description: description,
       receiptItemName: description,
       screenTitle: 'Оплата этапа',
+      productId: 'stage_${methodologyId}_$stageIndex',
+      purchaseKind: 'stage',
+      methodologyId: methodologyId,
+      stageIndex: stageIndex,
     );
 
     if (payment == null) return false;
@@ -74,6 +79,9 @@ class PaymentFlowService {
       description: description,
       receiptItemName: description,
       screenTitle: 'Оплата ПРЕМИУМ',
+      productId: 'premium_$methodologyId',
+      purchaseKind: 'premium',
+      methodologyId: methodologyId,
     );
 
     if (payment == null) return false;
@@ -110,6 +118,8 @@ class PaymentFlowService {
       description: description,
       receiptItemName: description,
       screenTitle: 'Оплата всех диет',
+      productId: 'premium_all',
+      purchaseKind: 'all_methodologies',
     );
 
     if (payment == null) return false;
@@ -133,6 +143,10 @@ class PaymentFlowService {
     required String description,
     required String receiptItemName,
     required String screenTitle,
+    required String productId,
+    required String purchaseKind,
+    String? methodologyId,
+    int? stageIndex,
   }) async {
     if (!TBankPaymentService.isConfigured) {
       if (context.mounted) {
@@ -148,6 +162,14 @@ class PaymentFlowService {
     final receiptEmail = await ProfileService.getReceiptEmailForPayment();
 
     try {
+      await AppMetricaService.reportPaymentStarted(
+        productId: productId,
+        purchaseKind: purchaseKind,
+        amountKopecks: amountKopecks,
+        methodologyId: methodologyId,
+        stageIndex: stageIndex,
+      );
+
       final paymentService = TBankPaymentService();
       final orderId = DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -177,6 +199,7 @@ class PaymentFlowService {
       final result = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: '/payment'),
           builder: (_) => PaymentScreen(
             paymentUrl: urlToOpen,
             paymentId: paymentId,
@@ -188,15 +211,43 @@ class PaymentFlowService {
       );
 
       if (result == true) {
+        await AppMetricaService.reportPaymentSuccess(
+          productId: productId,
+          purchaseKind: purchaseKind,
+          amountKopecks: amountKopecks,
+          orderId: orderId,
+          paymentId: paymentId,
+          methodologyId: methodologyId,
+          stageIndex: stageIndex,
+        );
         return (paymentId: paymentId, orderId: orderId);
       }
 
       final recovered = await _tryRecoverPaymentAfterClose(paymentService);
       if (recovered) {
+        await AppMetricaService.reportPaymentSuccess(
+          productId: productId,
+          purchaseKind: purchaseKind,
+          amountKopecks: amountKopecks,
+          orderId: orderId,
+          paymentId: paymentId,
+          methodologyId: methodologyId,
+          stageIndex: stageIndex,
+        );
         return (paymentId: paymentId, orderId: orderId);
       }
+
+      await AppMetricaService.reportPaymentCancelled(
+        productId: productId,
+        purchaseKind: purchaseKind,
+      );
       return null;
     } catch (e) {
+      await AppMetricaService.reportPaymentFailed(
+        productId: productId,
+        purchaseKind: purchaseKind,
+        error: e,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:my_diet/constants/app_version.dart';
 import 'package:my_diet/data/legal_documents.dart';
 import 'package:my_diet/screens/literature_screen.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/export_service.dart';
 import 'package:my_diet/services/rustore_review_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
@@ -283,7 +285,10 @@ class AboutScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () => ExportService.shareApp(),
+          onPressed: () async {
+            await ExportService.shareApp();
+            await AppMetricaService.reportEvent(AppMetricaEvents.shareApp);
+          },
           icon: const Icon(Icons.share_outlined, size: 20),
           label: const Text('Поделиться приложением'),
         ),

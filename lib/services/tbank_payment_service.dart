@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 class TBankPaymentService {
   static const String _baseUrl = 'https://securepay.tinkoff.ru/v2';
   static const String _lastPaymentIdKey = 'my_diet_last_payment_id';
+  static const _requestTimeout = Duration(seconds: 20);
+
+  Future<http.Response> _post(Uri uri, String body) {
+    return http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        )
+        .timeout(_requestTimeout);
+  }
 
   static String paymentSuccessDeeplink(String orderId) =>
       'app://payment/success/$orderId';
@@ -77,10 +89,9 @@ class TBankPaymentService {
     final token = _generateToken(requestData);
     requestData['Token'] = token;
 
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_baseUrl/Init'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(requestData),
+      jsonEncode(requestData),
     );
 
     if (response.statusCode != 200) {
@@ -109,10 +120,9 @@ class TBankPaymentService {
       };
       requestData['Token'] = _generateToken(requestData);
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$_baseUrl/GetQr'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(requestData),
+        jsonEncode(requestData),
       );
 
       if (response.statusCode != 200) return null;
@@ -135,10 +145,9 @@ class TBankPaymentService {
       };
       requestData['Token'] = _generateToken(requestData);
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$_baseUrl/CheckOrder'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(requestData),
+        jsonEncode(requestData),
       );
 
       if (response.statusCode != 200) {
@@ -176,10 +185,9 @@ class TBankPaymentService {
     };
     requestData['Token'] = _generateToken(requestData);
 
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_baseUrl/GetState'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(requestData),
+      jsonEncode(requestData),
     );
 
     if (response.statusCode != 200) {

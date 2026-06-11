@@ -49,6 +49,7 @@ dependencies:
   flutter_rustore_review: ^10.0.0
   flutter_timezone: ^5.1.0
   appmetrica_plugin: ^3.4.0
+  decimal: ^3.2.4
 
 dev_dependencies:
   flutter_test:

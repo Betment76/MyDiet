@@ -4,37 +4,22 @@ import 'package:provider/provider.dart';
 import 'package:my_diet/screens/disclaimer_screen.dart';
 import 'package:my_diet/screens/home_screen.dart';
 import 'package:my_diet/screens/onboarding_screen.dart';
-import 'package:my_diet/services/appmetrica_service.dart';
+import 'package:my_diet/services/app_bootstrap.dart';
+import 'package:my_diet/services/appmetrica_navigator_observer.dart';
 import 'package:my_diet/services/disclaimer_service.dart';
-import 'package:my_diet/services/theme_provider.dart';
 import 'package:my_diet/services/notification_service.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/purchase_verification_service.dart';
-import 'package:my_diet/services/rustore_review_service.dart';
-import 'package:my_diet/services/yandex_ads_service.dart';
-import 'package:my_diet/utils/ad_free_notifier.dart';
-
+import 'package:my_diet/services/theme_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Чёрный системный бар
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.black,
     statusBarIconBrightness: Brightness.light,
   ));
 
-  await YandexAdsService().initialize();
-  await AdFreeNotifier.refreshFromPrefs();
-  await NotificationService().init();
-  await NotificationService().rescheduleFromSavedSettings();
-  await PurchaseVerificationService.verifyAndSyncPurchases();
-  await RustoreReviewService.initialize();
-
-  // Проверяем дисклеймер и профиль
   final disclaimerAccepted = await DisclaimerService.isAccepted();
-  if (disclaimerAccepted) {
-    await AppMetricaService.initialize();
-  }
   final profileExists = await ProfileService.exists();
 
   runApp(
@@ -46,6 +31,8 @@ void main() async {
       ),
     ),
   );
+
+  AppBootstrap.scheduleAfterFirstFrame(disclaimerAccepted: disclaimerAccepted);
 }
 
 class MyDietApp extends StatefulWidget {
@@ -103,6 +90,7 @@ class _MyDietAppState extends State<MyDietApp> with WidgetsBindingObserver {
         title: 'Моя диета',
         debugShowCheckedModeBanner: false,
         theme: themeProvider.theme,
+        navigatorObservers: [AppMetricaNavigatorObserver.instance],
         initialRoute: _initialRoute,
         routes: {
           '/disclaimer': (_) => const DisclaimerScreen(),

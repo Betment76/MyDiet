@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:my_diet/constants/ad_constants.dart';
 import 'package:my_diet/data/methodology_registry.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/payment_flow_service.dart';
 import 'package:my_diet/services/premium_purchase_service.dart';
 import 'package:my_diet/services/stage_purchase_service.dart';
@@ -53,6 +55,15 @@ Future<bool> showDayUnlockDialog(
   final config = MethodologyRegistry.get(methodologyId);
   final stageName = config.stageCardNames[stageIndex];
   final dietTitle = config.title;
+
+  await AppMetricaService.reportEventWithMap(
+    AppMetricaEvents.dayUnlockDialogShown,
+    {
+      'methodology_id': methodologyId,
+      'stage_index': stageIndex,
+      'day_number': dayNumber,
+    },
+  );
 
   final result = await showAppBottomSheet<String>(
     context: context,
@@ -109,6 +120,14 @@ Future<bool> showDayUnlockDialog(
       methodologyId,
       stageIndex,
       dayNumber,
+    );
+    await AppMetricaService.reportEventWithMap(
+      AppMetricaEvents.dayUnlockedAd,
+      {
+        'methodology_id': methodologyId,
+        'stage_index': stageIndex,
+        'day_number': dayNumber,
+      },
     );
     return true;
   }
