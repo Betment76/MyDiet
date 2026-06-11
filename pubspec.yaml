@@ -48,6 +48,7 @@ dependencies:
   crypto: ^3.0.7
   flutter_rustore_review: ^10.0.0
   flutter_timezone: ^5.1.0
+  appmetrica_plugin: ^3.4.0
 
 dev_dependencies:
   flutter_test:

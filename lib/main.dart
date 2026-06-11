@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:my_diet/screens/disclaimer_screen.dart';
 import 'package:my_diet/screens/home_screen.dart';
 import 'package:my_diet/screens/onboarding_screen.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/disclaimer_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
 import 'package:my_diet/services/notification_service.dart';
@@ -31,6 +32,9 @@ void main() async {
 
   // Проверяем дисклеймер и профиль
   final disclaimerAccepted = await DisclaimerService.isAccepted();
+  if (disclaimerAccepted) {
+    await AppMetricaService.initialize();
+  }
   final profileExists = await ProfileService.exists();
 
   runApp(
