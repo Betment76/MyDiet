@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:my_diet/constants/app_version.dart';
 import 'package:my_diet/data/legal_documents.dart';
 import 'package:my_diet/screens/literature_screen.dart';
 import 'package:my_diet/services/export_service.dart';
@@ -63,10 +64,10 @@ class AboutScreen extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 28),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
-                    'Версия 1.0.0',
+                  Text(
+                    AppVersion.display,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: 12),
                   ),
 
                   const SizedBox(height: 8),
@@ -170,9 +171,9 @@ class AboutScreen extends StatelessWidget {
                         dense: true,
                         visualDensity: VisualDensity.compact,
                         leading: const Icon(Icons.new_releases_outlined, color: ThemeProvider.primaryGreen, size: 22),
-                        title: const Text('Что нового в версии 1.0.0', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        title: Text(AppVersion.whatsNewTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                         trailing: const Icon(Icons.chevron_right, size: 20),
-                        onTap: () => _showBottomSheet(context, 'Что нового в версии 1.0.0', _whatsNew),
+                        onTap: () => _showBottomSheet(context, AppVersion.whatsNewTitle, _whatsNew),
                       ),
                     ),
                   ),
@@ -372,18 +373,13 @@ const _instruction = '''
 ''';
 
 const _whatsNew = '''
-ЧТО НОВОГО В ВЕРСИИ 1.0.0
+ЧТО НОВОГО В ВЕРСИИ 1.0.1
 
-Первый релиз приложения «Моя диета»!
-
-• 5 авторских методик поэтапного похудения
-• Индивидуальный план питания на каждый день
-• Учёт запрещённых продуктов и аллергий
-• Дневник питания с контролем воды и прогулок
-• График прогресса и статистика по этапам
-• Рецепты с иллюстрациями для методик Гурман и Fun
-• Напоминания о питьевом режиме
-• Резервное копирование данных
+• Подготовка к публикации в RuStore
+• Оплата этапов и ПРЕМИУМ через T‑Банк (СБП / карта)
+• In-app отзывы RuStore
+• Юридические документы и дисклеймер при первом запуске
+• Улучшения стабильности и интерфейса
 
 Спасибо, что выбрали наше приложение!
 ''';
