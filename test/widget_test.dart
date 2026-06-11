@@ -9,7 +9,10 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => ThemeProvider(),
-        child: const MyDietApp(profileExists: false),
+        child: const MyDietApp(
+          disclaimerAccepted: true,
+          profileExists: false,
+        ),
       ),
     );
 

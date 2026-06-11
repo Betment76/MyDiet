@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:my_diet/data/methodology_registry.dart';
 import 'package:my_diet/services/meal_plan_generator.dart';
 import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
@@ -38,8 +39,8 @@ const _allTips = [
   'Орехи — горсть в день, но не увлекайтесь, они калорийны.',
   'Ходьба 40–60 мин ежедневно утром натощак — обязательно!',
   'Взвешивайтесь раз в неделю в одно и то же время.',
-  // Закрепительный этап
-  'На закрепительном этапе постепенно возвращайте привычные продукты.',
+  // Завершающий этап
+  'На завершающем этапе постепенно возвращайте привычные продукты.',
   'Цельнозерновой хлеб — до 2 кусочков в день.',
   'Тёмный шоколад (от 75% какао) можно до 30 г в день.',
   'При срыве — вернитесь на основной этап на 1–2 дня.',
@@ -61,6 +62,9 @@ class PlanLoadingScreen extends StatefulWidget {
 
 class _PlanLoadingScreenState extends State<PlanLoadingScreen>
     with SingleTickerProviderStateMixin {
+  static const _primaryTextColor = Color(0xFF3E2723);
+  static const _secondaryTextColor = Color(0xFF5D4037);
+
   late AnimationController _animCtrl;
   late Animation<double> _pulseAnim;
   late Animation<double> _rotateAnim;
@@ -122,12 +126,14 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
   Future<void> _generateAllPlans() async {
     final restricted = await ProfileService.loadRestricted();
     for (int i = 0; i < 3; i++) {
-      final plan = generateStagePlan(i, restricted);
-      await PlanCacheService.save(i, plan, restricted);
+      for (final id in [MethodologyIds.express, MethodologyIds.gourmets, MethodologyIds.fun, MethodologyIds.men, MethodologyIds.victory]) {
+        final plan = generateStagePlan(id, i, restricted);
+        await PlanCacheService.save(id, i, plan, restricted);
+      }
     }
   }
 
-  void _finishLoading() {
+  Future<void> _finishLoading() async {
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/home');
   }
@@ -146,7 +152,7 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
       body: Container(
         width: double.infinity,
         decoration: const BoxDecoration(
-          gradient: ThemeProvider.headerGradient,
+          gradient: ThemeProvider.appBackgroundGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -187,7 +193,7 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
                     : 'Составляем меню\nна все этапы',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: _primaryTextColor,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   height: 1.3,
@@ -200,8 +206,8 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
                 widget.isRegeneration
                     ? 'Обновляем список блюд...'
                     : 'Учитываем ваши ограничения...',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
+                style: const TextStyle(
+                  color: _secondaryTextColor,
                   fontSize: 14,
                 ),
               ),
@@ -215,8 +221,9 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: _progress,
-                    backgroundColor: Colors.white.withValues(alpha: 0.25),
-                    valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    backgroundColor: Colors.brown.withValues(alpha: 0.15),
+                    valueColor:
+                        const AlwaysStoppedAnimation(_primaryTextColor),
                     minHeight: 6,
                   ),
                 ),
@@ -233,8 +240,16 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
                       ? Offset.zero
                       : const Offset(0, 0.1),
                   duration: const Duration(milliseconds: 400),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.42),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Column(
                       children: [
                         Row(
@@ -242,13 +257,14 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
                           children: [
                             Icon(Icons.lightbulb_outline,
                                 size: 18,
-                                color: Colors.white.withValues(alpha: 0.9)),
+                                color:
+                                    _secondaryTextColor.withValues(alpha: 0.95)),
                             const SizedBox(width: 6),
-                            Text(
+                            const Text(
                               'Совет',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.white.withValues(alpha: 0.7),
+                                color: _secondaryTextColor,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5,
                               ),
@@ -259,8 +275,8 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
                         Text(
                           _allTips[_tipIndex],
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.95),
+                          style: const TextStyle(
+                            color: _primaryTextColor,
                             fontSize: 14,
                             height: 1.4,
                           ),

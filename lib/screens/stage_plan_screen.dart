@@ -1,21 +1,26 @@
 // Универсальный экран этапа — карточка с инфой + дни с чекбоксами
 // Работает для всех трёх этапов (0, 1, 2)
 
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:my_diet/data/methodology_registry.dart';
 import 'package:my_diet/data/prep_plan_data.dart';
-import 'package:my_diet/data/stage_data.dart';
 import 'package:my_diet/models/stage_info.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_diet/services/meal_progress_service.dart';
+import 'package:my_diet/services/profile_service.dart';
+import 'package:my_diet/services/purchase_verification_service.dart';
+import 'package:my_diet/services/stage_unlock_service.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
+import 'package:my_diet/widgets/unlock_dialogs.dart';
 
 class StagePlanScreen extends StatefulWidget {
+  final String methodologyId;
   final int stageIndex;
   final List<PrepDay> plan;
   final VoidCallback? onBack;
 
   const StagePlanScreen({
     super.key,
+    required this.methodologyId,
     required this.stageIndex,
     required this.plan,
     this.onBack,
@@ -26,133 +31,148 @@ class StagePlanScreen extends StatefulWidget {
 }
 
 class _StagePlanScreenState extends State<StagePlanScreen> {
+  late final MethodologyConfig _config;
   late final List<PrepDay> _plan;
   Set<String> _done = {};
+  int _maxUnlockedDay = 1;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _config = MethodologyRegistry.get(widget.methodologyId);
     _plan = widget.plan;
-    _loadProgress();
+    _load();
   }
 
-  Future<void> _loadProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'stage_${widget.stageIndex}_progress';
-    final stored = prefs.getString(key);
-    if (stored != null && stored.isNotEmpty) {
-      try {
-        final list = List<String>.from(jsonDecode(stored));
-        if (mounted) setState(() { _done = list.toSet(); _loading = false; });
-      } catch (_) {
-        if (mounted) setState(() => _loading = false);
-      }
-    } else {
-      if (mounted) setState(() => _loading = false);
+  Future<void> _load() async {
+    await PurchaseVerificationService.verifyBeforeAccess(widget.methodologyId);
+    final done = await MealProgressService.loadDone(
+      widget.stageIndex,
+      methodologyId: widget.methodologyId,
+    );
+    final maxDay = await StageUnlockService.getMaxUnlockedDay(
+      widget.methodologyId,
+      widget.stageIndex,
+      _plan.length,
+    );
+    if (mounted) {
+      setState(() {
+        _done = done;
+        _maxUnlockedDay = maxDay;
+        _loading = false;
+      });
     }
   }
 
-  Future<void> _toggle(String key) async {
-    setState(() {
-      if (_done.contains(key)) { _done.remove(key); } else { _done.add(key); }
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('stage_${widget.stageIndex}_progress',
-        jsonEncode(_done.toList()));
+  Future<void> _onLockedDayTap(int dayNumber) async {
+    await _load();
+    if (!mounted || dayNumber <= _maxUnlockedDay) return;
+
+    final unlocked = await showDayUnlockDialog(
+      context,
+      methodologyId: widget.methodologyId,
+      stageIndex: widget.stageIndex,
+      dayNumber: dayNumber,
+      totalDays: _plan.length,
+    );
+    if (unlocked && mounted) await _load();
+  }
+
+  Future<void> _togglePlanMeal(int planDay, int mealIndex) async {
+    final wasMarked = MealProgressService.isPlanMealMarked(
+      _done,
+      widget.stageIndex,
+      planDay,
+      mealIndex,
+      methodologyId: widget.methodologyId,
+    );
+    final updated = await MealProgressService.togglePlanMeal(
+      done: Set<String>.from(_done),
+      stageIndex: widget.stageIndex,
+      planDay: planDay,
+      mealIndex: mealIndex,
+      methodologyId: widget.methodologyId,
+    );
+    if (!wasMarked &&
+        MealProgressService.isPlanMealMarked(
+          updated,
+          widget.stageIndex,
+          planDay,
+          mealIndex,
+          methodologyId: widget.methodologyId,
+        )) {
+      await ProfileService.setStage(
+        widget.stageIndex + 1,
+        methodologyId: widget.methodologyId,
+      );
+    }
+    if (mounted) setState(() => _done = updated);
+    ProfileService.setActiveMethodology(widget.methodologyId);
   }
 
   @override
   Widget build(BuildContext context) {
-    final stage = StageData.stages[widget.stageIndex];
-    final stageEmoji = ['\u{1F3C3}', '\u{1F4AA}', '\u{1F3AF}'][widget.stageIndex];
-    final stageGradient = [
-      const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFFFB74D)]),
-      const LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]),
-      const LinearGradient(colors: [Color(0xFF1976D2), Color(0xFF42A5F5)]),
-    ][widget.stageIndex];
-
-    final stageColor = [
-      const Color(0xFFFF9800),
-      const Color(0xFF2E7D32),
-      const Color(0xFF1976D2),
-    ][widget.stageIndex];
+    final stage = _config.stages[widget.stageIndex];
+    final stageEmoji = _config.stageEmojis[widget.stageIndex];
+    final stageColor = _config.stageColors[widget.stageIndex];
 
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return MethodologyGradientBackground(
+        gradient: _config.backgroundGradient,
+        child: const Center(child: CircularProgressIndicator()),
+      );
     }
 
-    return CustomScrollView(
-      slivers: [
-        // Шапка
-        SliverToBoxAdapter(
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(gradient: stageGradient),
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 8,
-              bottom: 12,
-              left: 4,
-              right: 16,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: widget.onBack,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+    return MethodologyGradientBackground(
+      gradient: _config.backgroundGradient,
+      child: Column(
+        children: [
+          MethodologyFixedHeader(
+            title: stage.title,
+            subtitle: '${_plan.length} дней • отмечайте что съели',
+            onBack: widget.onBack,
+          ),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index == 0) {
+                          return _StageInfoCard(
+                            stage: stage,
+                            stageColor: stageColor,
+                            emoji: stageEmoji,
+                            cardTitle:
+                                _config.stageCardNames[widget.stageIndex],
+                          );
+                        }
+                        final dayIndex = index - 1;
+                        if (dayIndex >= _plan.length) return null;
+                        final day = _plan[dayIndex];
+                        final isLocked = day.day > _maxUnlockedDay;
+                        return _DayCard(
+                          day: day,
+                          stageIndex: widget.stageIndex,
+                          methodologyId: widget.methodologyId,
+                          done: _done,
+                          isLocked: isLocked,
+                          onToggleMeal: _togglePlanMeal,
+                          onLockedTap: () => _onLockedDayTap(day.day),
+                        );
+                      },
+                      childCount: _plan.length + 1,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        stage.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Text(
-                    '${_plan.length} дней • отмечайте что съели',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-        // Список
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                if (index == 0) {
-                  return _StageInfoCard(stage: stage, stageColor: stageColor, emoji: stageEmoji);
-                }
-                final dayIndex = index - 1;
-                if (dayIndex >= _plan.length) return null;
-                return _DayCard(
-                  day: _plan[dayIndex],
-                  stageIndex: widget.stageIndex,
-                  done: _done,
-                  onToggle: _toggle,
-                );
-              },
-              childCount: _plan.length + 1,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -162,21 +182,18 @@ class _StageInfoCard extends StatelessWidget {
   final StageInfo stage;
   final Color stageColor;
   final String emoji;
+  final String cardTitle;
 
   const _StageInfoCard({
     required this.stage,
     required this.stageColor,
     required this.emoji,
+    required this.cardTitle,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final titles = [
-      'Подготовительный этап\nВход в кетоз',
-      'Основной этап\nАктивное жиросжигание',
-      'Закрепительный этап\nВыход из диеты',
-    ];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -199,7 +216,7 @@ class _StageInfoCard extends StatelessWidget {
           child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
         ),
         title: Text(
-          titles[stage.number - 1],
+          cardTitle,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         ),
         subtitle: const Text('Нажмите, чтобы узнать подробнее',
@@ -262,22 +279,71 @@ class _StageInfoCard extends StatelessWidget {
 class _DayCard extends StatelessWidget {
   final PrepDay day;
   final int stageIndex;
+  final String methodologyId;
   final Set<String> done;
-  final ValueChanged<String> onToggle;
+  final bool isLocked;
+  final void Function(int planDay, int mealIndex) onToggleMeal;
+  final VoidCallback onLockedTap;
 
   const _DayCard({
     required this.day,
     required this.stageIndex,
+    required this.methodologyId,
     required this.done,
-    required this.onToggle,
+    required this.isLocked,
+    required this.onToggleMeal,
+    required this.onLockedTap,
   });
+
+  bool _isMarked(int mealIndex) =>
+      MealProgressService.isPlanMealMarked(
+        done,
+        stageIndex,
+        day.day,
+        mealIndex,
+        methodologyId: methodologyId,
+      );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final total = day.meals.length;
-    final completed = day.meals.where((m) =>
-        done.contains('stage${stageIndex}_day_${day.day - 1}_meal_${day.meals.indexOf(m)}')).length;
+    final completed = day.meals
+        .where((m) => _isMarked(day.meals.indexOf(m)))
+        .length;
+
+    if (isLocked) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        elevation: 1,
+        color: theme.colorScheme.surface.withValues(alpha: 0.7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          onTap: onLockedTap,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.grey.shade300,
+            child: Icon(Icons.lock, size: 18, color: Colors.grey.shade700),
+          ),
+          title: Text(
+            '${day.day}-й день',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          subtitle: const Text(
+            'Нажмите, чтобы открыть',
+            style: TextStyle(fontSize: 12),
+          ),
+          trailing: Icon(Icons.lock_outline, color: Colors.grey.shade600),
+        ),
+      );
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -332,12 +398,11 @@ class _DayCard extends StatelessWidget {
         children: [
           ...day.meals.map((meal) {
             final idx = day.meals.indexOf(meal);
-            final key = 'stage${stageIndex}_day_${day.day - 1}_meal_$idx';
-            final isDone = done.contains(key);
+            final isDone = _isMarked(idx);
             return _MealCheckTile(
               meal: meal,
               isDone: isDone,
-              onChanged: (_) => onToggle(key),
+              onChanged: (_) => onToggleMeal(day.day, idx),
             );
           }),
         ],
@@ -360,14 +425,7 @@ class _MealCheckTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final icon = switch (meal.name) {
-      'Завтрак'    => Icons.wb_sunny_outlined,
-      'Обед'       => Icons.restaurant,
-      'Ужин'       => Icons.nightlight_outlined,
-      'Перекус'    => Icons.apple_outlined,
-      'Перед сном' => Icons.bedtime_outlined,
-      _            => Icons.circle_outlined,
-    };
+    final icon = _mealIcon(meal.name);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -420,5 +478,32 @@ class _MealCheckTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+IconData _mealIcon(String name) {
+  switch (name) {
+    case 'Завтрак':
+    case 'Утро':
+      return Icons.wb_sunny_outlined;
+    case 'Обед':
+      return Icons.restaurant;
+    case 'Ужин':
+      return Icons.nightlight_outlined;
+    case 'Перекус':
+      return Icons.apple_outlined;
+    case 'Полдник':
+      return Icons.free_breakfast_outlined;
+    case 'Перед сном':
+      return Icons.bedtime_outlined;
+    case 'Порция 1':
+    case 'Порция 2':
+    case 'Порция 3':
+      return Icons.local_drink_outlined;
+    case 'Режим':
+    case 'Закрепление':
+      return Icons.info_outline;
+    default:
+      return Icons.circle_outlined;
   }
 }

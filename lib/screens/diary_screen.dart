@@ -6,7 +6,7 @@ import 'package:my_diet/data/stage_meal_data.dart';
 import 'package:my_diet/services/meal_plan_generator.dart';
 import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
-import 'package:my_diet/services/theme_provider.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Экран «Дневник» — календарь, калории, ходьба, вода
@@ -116,10 +116,11 @@ class DiaryScreenState extends State<DiaryScreen> {
     int walk = 0;
 
     // Текущий этап
-    int stageIdx = (await ProfileService.getStage()) - 1;
+    final methodologyId = await ProfileService.getActiveMethodology();
+    int stageIdx = (await ProfileService.getStage(methodologyId: methodologyId)) - 1;
     if (stageIdx < 0 || stageIdx >= stagePlans.length) stageIdx = 0;
 
-    final stageStart = await ProfileService.getStageStartDate();
+    final stageStart = await ProfileService.getStageStartDate(methodologyId: methodologyId);
 
     // Определяем день этапа для выбранной даты
     if (stageStart != null && stageIdx < stagePlans.length) {
@@ -130,8 +131,8 @@ class DiaryScreenState extends State<DiaryScreen> {
 
         // Загружаем план
         final restricted = await ProfileService.loadRestricted();
-        final plan = await PlanCacheService.load(stageIdx, restricted) ??
-            generateStagePlan(stageIdx, restricted);
+        final plan = await PlanCacheService.load(methodologyId, stageIdx, restricted) ??
+            generateStagePlan(methodologyId, stageIdx, restricted);
 
         if (plan.isNotEmpty && dayIndex < plan.length) {
           final currentDay = plan[dayIndex];
@@ -244,7 +245,11 @@ class DiaryScreenState extends State<DiaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const AppGradientBackground(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final theme = Theme.of(context);
     final now = DateTime.now();
@@ -256,15 +261,12 @@ class DiaryScreenState extends State<DiaryScreen> {
         '${_selectedDate.day} ${_monthName(_selectedDate.month)} ${_selectedDate.year}, ${_weekDay(_selectedDate.weekday)}';
     final isToday = sel == today;
 
-    return SingleChildScrollView(
+    return AppGradientBackground(
+      child: SingleChildScrollView(
       child: Column(
         children: [
-          // Градиент-хедер
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: ThemeProvider.headerGradient,
-            ),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 16,
               bottom: 16,
@@ -710,6 +712,7 @@ class DiaryScreenState extends State<DiaryScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

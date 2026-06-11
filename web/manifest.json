@@ -1,11 +1,11 @@
 {
-    "name": "my_diet",
-    "short_name": "my_diet",
+    "name": "Моя диета",
+    "short_name": "Моя диета",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Поэтапное похудение без голодовок.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

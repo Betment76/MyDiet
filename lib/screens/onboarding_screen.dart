@@ -14,12 +14,16 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _heightCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
+  final _targetWeightCtrl = TextEditingController();
   final _birthDateCtrl = TextEditingController();
   DateTime? _birthDate;
   bool _saving = false;
   bool _formatting = false;
+
+  static const _fieldGap = 8.0;
 
   // Светло-зелёный полупрозрачный стиль полей
   static const _greenInput = InputDecoration(
@@ -42,7 +46,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    // Авто-расстановка точек в дате
     _birthDateCtrl.addListener(_formatDate);
   }
 
@@ -74,8 +77,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _emailCtrl.dispose();
     _heightCtrl.dispose();
     _weightCtrl.dispose();
+    _targetWeightCtrl.dispose();
     _birthDateCtrl.dispose();
     super.dispose();
   }
@@ -83,7 +88,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Парсим дату из текстового поля
     final parts = _birthDateCtrl.text.trim().split('.');
     final day = int.parse(parts[0]);
     final month = int.parse(parts[1]);
@@ -91,10 +95,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _birthDate = DateTime(year, month, day);
 
     setState(() => _saving = true);
+    double parseWeight(String text) =>
+        double.parse(text.trim().replaceAll(',', '.'));
+
     await ProfileService.save(
       name: _nameCtrl.text.trim(),
-      height: double.parse(_heightCtrl.text),
-      weight: double.parse(_weightCtrl.text),
+      email: _emailCtrl.text.trim(),
+      height: parseWeight(_heightCtrl.text),
+      weight: parseWeight(_weightCtrl.text),
+      targetWeight: parseWeight(_targetWeightCtrl.text),
       birthDate: _birthDate!,
     );
 
@@ -113,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
-          gradient: ThemeProvider.headerGradient,
+          gradient: ThemeProvider.appBackgroundGradient,
         ),
         child: SafeArea(
           child: Center(
@@ -137,7 +146,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Иконка приложения
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: Image.asset(
@@ -148,7 +156,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      // Название приложения под иконкой
                       Text(
                         'Моя Диета',
                         style: theme.textTheme.titleSmall?.copyWith(
@@ -157,23 +164,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       Text(
                         'Добро пожаловать!',
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
                         'Начните свой путь к здоровью',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
 
-                      // Имя
                       TextFormField(
                         controller: _nameCtrl,
                         textCapitalization: TextCapitalization.words,
@@ -184,9 +190,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         validator: (v) =>
                             (v == null || v.trim().isEmpty) ? 'Введите имя' : null,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _fieldGap),
 
-                      // Рост
+                      TextFormField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        decoration: _greenInput.copyWith(
+                          labelText: 'Электронная почта для чеков (необязательно)',
+                          prefixIcon: const Icon(Icons.email_outlined),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          final email = v.trim();
+                          final valid = RegExp(
+                            r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                          ).hasMatch(email);
+                          if (!valid) {
+                            return 'Введите корректный адрес почты';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: _fieldGap),
+
                       TextFormField(
                         controller: _heightCtrl,
                         keyboardType: TextInputType.number,
@@ -197,30 +224,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Введите рост';
                           final n = double.tryParse(v);
-                          if (n == null || n < 80 || n > 250) return 'Рост от 80 до 250 см';
+                          if (n == null || n < 80 || n > 250) {
+                            return 'Рост от 80 до 250 см';
+                          }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _fieldGap),
 
-                      // Вес
                       TextFormField(
                         controller: _weightCtrl,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: _greenInput.copyWith(
-                          labelText: 'Вес (кг)',
+                          labelText: 'Текущий вес (кг)',
                           prefixIcon: const Icon(Icons.monitor_weight_outlined),
                         ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Введите вес';
-                          final n = double.tryParse(v);
-                          if (n == null || n < 30 || n > 300) return 'Вес от 30 до 300 кг';
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Введите текущий вес';
+                          }
+                          final n = double.tryParse(v.replaceAll(',', '.'));
+                          if (n == null || n < 30 || n > 300) {
+                            return 'Вес от 30 до 300 кг';
+                          }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _fieldGap),
 
-                      // Дата рождения — текстовый ввод дд.мм.гггг
+                      TextFormField(
+                        controller: _targetWeightCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: _greenInput.copyWith(
+                          labelText: 'Целевой вес (кг)',
+                          prefixIcon: const Icon(Icons.flag_outlined),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Введите целевой вес';
+                          }
+                          final n = double.tryParse(v.replaceAll(',', '.'));
+                          if (n == null || n < 30 || n > 300) {
+                            return 'Вес от 30 до 300 кг';
+                          }
+                          final current = double.tryParse(
+                            _weightCtrl.text.replaceAll(',', '.'),
+                          );
+                          if (current != null && n >= current) {
+                            return 'Целевой вес должен быть меньше текущего';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: _fieldGap),
+
                       TextFormField(
                         controller: _birthDateCtrl,
                         keyboardType: TextInputType.datetime,
@@ -253,7 +314,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
 
                       SizedBox(
                         width: double.infinity,
@@ -288,5 +349,4 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
   }
-
 }

@@ -39,6 +39,19 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Android keystore and signing secrets
+*.jks
+**/key.properties
+pepk.jar
+**/pepk_out.zip
+**/upload_certificate.pem
+
+# Source books (data already in lib/ and assets/; not bundled in app)
+/docs/
+
+# IDE / agent
+.cursor/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

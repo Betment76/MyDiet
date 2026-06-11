@@ -1,5 +1,8 @@
-// Меню подготовительного этапа из книги «Минус размер» (Ковальков)
+// Меню подготовительного этапа «Минус размер»
 // 14 дней — белково-овощная основа, без мяса, без быстрых углеводов
+
+import 'package:my_diet/data/meal_calories.dart';
+import 'package:my_diet/data/methodology_registry.dart';
 
 class PrepMeal {
   final String name;
@@ -19,17 +22,12 @@ class PrepMeal {
     ingredients: ingredients ?? this.ingredients,
   );
 
-  /// Примерная калорийность по типу приёма
-  int get calories {
-    switch (name) {
-      case 'Завтрак': return 250;
-      case 'Перекус': return 100;
-      case 'Обед': return 350;
-      case 'Ужин': return 250;
-      case 'Перед сном': return 80;
-      default: return 0;
-    }
-  }
+  /// Примерная калорийность (экспресс, подготовительный этап).
+  int get calories => MealCalories.forMeal(
+        this,
+        methodologyId: MethodologyIds.express,
+        stageIndex: 0,
+      );
 
   Map<String, dynamic> toJson() => {
     'name': name,

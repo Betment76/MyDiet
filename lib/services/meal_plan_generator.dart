@@ -1,10 +1,8 @@
-// Генератор меню для всех этапов
-// Заменяет блюда с запрещёнными ингредиентами на альтернативы
-// из нашего списка продуктов (allFoods)
+// Генератор меню для всех этапов и методик
 
 import 'package:my_diet/data/food_data.dart';
+import 'package:my_diet/data/methodology_registry.dart';
 import 'package:my_diet/data/prep_plan_data.dart';
-import 'package:my_diet/data/stage_meal_data.dart';
 
 /// Все продукты, которые есть в нашей базе (приведены к нижнему регистру)
 final Set<String> _allValid = allFoods
@@ -12,9 +10,13 @@ final Set<String> _allValid = allFoods
     .map((s) => s.toLowerCase().trim())
     .toSet();
 
-/// Сгенерировать меню для этапа [stageIndex] с учётом запретов
-List<PrepDay> generateStagePlan(int stageIndex, List<String> restricted) {
-  final source = stagePlans[stageIndex];
+/// Сгенерировать меню для этапа с учётом запретов.
+List<PrepDay> generateStagePlan(
+  String methodologyId,
+  int stageIndex,
+  List<String> restricted,
+) {
+  final source = MethodologyRegistry.planFor(methodologyId, stageIndex);
   final banned = restricted.map((s) => s.toLowerCase().trim()).toSet();
   if (banned.isEmpty) return source;
 
@@ -70,6 +72,6 @@ String _cleanDescription(String desc, List<String> restricted) {
   return result;
 }
 
-/// Для обратной совместимости
+/// Для обратной совместимости (экспресс, этап 0).
 List<PrepDay> generatePrepPlan(List<String> restricted) =>
-    generateStagePlan(0, restricted);
+    generateStagePlan(MethodologyIds.express, 0, restricted);

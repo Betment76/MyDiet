@@ -1,11 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:my_diet/data/stage_meal_data.dart';
+import 'package:my_diet/data/methodology_registry.dart';
 import 'package:my_diet/services/export_service.dart';
+import 'package:my_diet/services/meal_plan_generator.dart';
+import 'package:my_diet/services/meal_progress_service.dart';
+import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
-import 'package:my_diet/services/theme_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
 
 /// Экран прогресса — вес + прогресс по этапам
 class ProgressScreen extends StatefulWidget {
@@ -23,18 +23,14 @@ class ProgressScreenState extends State<ProgressScreen> {
   double _currentWeight = 0;
   bool _loading = true;
 
-  // Прогресс этапов
-  final List<int> _stageCompleted = [0, 0, 0];
-  final List<int> _stageTotal = [0, 0, 0];
+  // Прогресс этапов (длина = число этапов методики)
+  List<int> _stageCompleted = [];
+  List<int> _stageTotal = [];
   int _weeks = 0;
 
   int _selectedStage = 0; // 0/1/2 = конкретный этап
   Map<int, DateTime> _stageStarts = {};
-  final _stageColors = [
-    const Color(0xFFFF9800),
-    const Color(0xFF2E7D32),
-    const Color(0xFF1976D2),
-  ];
+  MethodologyConfig _config = MethodologyRegistry.get(MethodologyIds.express);
 
   @override
   void initState() {
@@ -46,33 +42,43 @@ class ProgressScreenState extends State<ProgressScreen> {
   Future<void> refresh() => _load();
 
   Future<void> _load() async {
+    if (mounted) setState(() => _loading = true);
+
+    final methodologyId = await ProfileService.getActiveMethodology();
+    _config = MethodologyRegistry.get(methodologyId);
+
     final data = await ProfileService.load();
     final history = await ProfileService.loadWeightHistory();
     final dates = await ProfileService.loadWeightDates();
-    await _loadStageProgress();
-    final stageStarts = await ProfileService.loadStageStartDates();
+    await _loadStageProgress(methodologyId);
+    final stageStarts =
+        await ProfileService.loadStageStartDates(methodologyId: methodologyId);
 
-    // Fallback: если новая система пуста — берём из старой даты для текущего этапа
-    final currentStage = await ProfileService.getStage();
+    final currentStage =
+        await ProfileService.getStage(methodologyId: methodologyId);
     if (stageStarts.isEmpty) {
-      final oldStart = await ProfileService.getStageStartDate();
+      final oldStart =
+          await ProfileService.getStageStartDate(methodologyId: methodologyId);
       if (oldStart != null) {
         stageStarts[currentStage] = oldStart;
       }
     } else if (!stageStarts.containsKey(currentStage)) {
-      // Текущий этап не сохранён в новой системе — берём из старой
-      final oldStart = await ProfileService.getStageStartDate();
+      final oldStart =
+          await ProfileService.getStageStartDate(methodologyId: methodologyId);
       if (oldStart != null) {
         stageStarts[currentStage] = oldStart;
       }
     }
 
-    // Недели с первого взвешивания
     int weeks = 0;
     if (dates.length >= 2) {
       weeks = dates.last.difference(dates.first).inDays ~/ 7;
     }
 
+    final stageCount = _config.plans.length;
+    final selectedStage = (currentStage - 1).clamp(0, stageCount - 1);
+
+    if (!mounted) return;
     setState(() {
       _startWeight = data['startWeight'] as double;
       _currentWeight = history.isNotEmpty ? history.last : _startWeight;
@@ -81,40 +87,60 @@ class ProgressScreenState extends State<ProgressScreen> {
       _targetWeight = data['targetWeight'] as double;
       _weeks = weeks;
       _stageStarts = stageStarts;
-      _selectedStage = currentStage - 1;
+      _selectedStage = selectedStage;
       _loading = false;
     });
   }
 
-  Future<void> _loadStageProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (int stageIdx = 0; stageIdx < 3; stageIdx++) {
-      final plan = stagePlans[stageIdx];
-      int total = 0;
+  Future<void> _loadStageProgress(String methodologyId) async {
+    final config = MethodologyRegistry.get(methodologyId);
+    final restricted = await ProfileService.loadRestricted();
+    final stageCount = config.plans.length;
+
+    final completed = List<int>.filled(stageCount, 0);
+    final totals = List<int>.filled(stageCount, 0);
+
+    for (var stageIdx = 0; stageIdx < stageCount; stageIdx++) {
+      final plan = await PlanCacheService.load(
+            methodologyId,
+            stageIdx,
+            restricted,
+          ) ??
+          generateStagePlan(methodologyId, stageIdx, restricted);
+
+      var total = 0;
       for (final day in plan) {
         total += day.meals.length;
       }
-      _stageTotal[stageIdx] = total;
+      totals[stageIdx] = total;
 
-      final stored = prefs.getString('stage_${stageIdx}_progress');
-      if (stored != null && stored.isNotEmpty) {
-        try {
-          final list = List<String>.from(jsonDecode(stored));
-          _stageCompleted[stageIdx] = list.length;
-        } catch (_) {
-          _stageCompleted[stageIdx] = 0;
-        }
-      }
+      final done = await MealProgressService.loadDone(
+        stageIdx,
+        methodologyId: methodologyId,
+      );
+      completed[stageIdx] = MealProgressService.countUniqueMealsCompleted(
+        stageIdx,
+        done,
+        methodologyId: methodologyId,
+      ).clamp(0, total);
     }
+
+    _stageCompleted = completed;
+    _stageTotal = totals;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const AppGradientBackground(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final theme = Theme.of(context);
     final currentWeight = _weightPoints.last;
     final lost = _startWeight - currentWeight;
+    final stageCount = _config.plans.length;
 
     final overallCompleted =
         _stageCompleted.fold(0, (a, b) => a + b);
@@ -122,21 +148,18 @@ class ProgressScreenState extends State<ProgressScreen> {
     final overallPercent =
         overallTotal > 0 ? overallCompleted / overallTotal : 0.0;
 
-    final stageData = [
-      (name: 'Подготовительный', emoji: '\u{1F3C3}', color: const Color(0xFFFF9800)),
-      (name: 'Основной', emoji: '\u{1F4AA}', color: const Color(0xFF2E7D32)),
-      (name: 'Закрепительный', emoji: '\u{1F3AF}', color: const Color(0xFF1976D2)),
-    ];
+    final stageData = List.generate(stageCount, (i) => (
+          name: _config.stageCardNames[i],
+          emoji: _config.stageEmojis[i],
+          color: _config.stageColors[i],
+        ));
 
-    return SingleChildScrollView(
+    return AppGradientBackground(
+      child: SingleChildScrollView(
       child: Column(
         children: [
-          // Градиент-хедер
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: ThemeProvider.headerGradient,
-            ),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 16,
               bottom: 16,
@@ -258,10 +281,13 @@ class ProgressScreenState extends State<ProgressScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      ...List.generate(3, (i) {
+                      ...List.generate(stageCount, (i) {
                         final sd = stageData[i];
-                        final completed = _stageCompleted[i];
-                        final total = _stageTotal[i];
+                        final completed = i < _stageCompleted.length
+                            ? _stageCompleted[i]
+                            : 0;
+                        final total =
+                            i < _stageTotal.length ? _stageTotal[i] : 0;
                         final percent = total > 0 ? completed / total : 0.0;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -333,11 +359,11 @@ class ProgressScreenState extends State<ProgressScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      for (var i = 0; i < 3; i++)
+                      for (var i = 0; i < stageCount; i++)
                         _StageChip(
                           label: '${i + 1}-й этап',
                           selected: _selectedStage == i,
-                          color: _stageColors[i],
+                          color: _config.stageColors[i],
                           onTap: () => setState(() => _selectedStage = i),
                         ),
                     ],
@@ -363,8 +389,9 @@ class ProgressScreenState extends State<ProgressScreen> {
                           _buildFilteredPoints(),
                           minY: _targetWeight,
                           maxY: _startWeight,
-                          stageDays: _selectedStage >= 0 && _selectedStage < stagePlans.length
-                              ? stagePlans[_selectedStage].length
+                          stageDays: _selectedStage >= 0 &&
+                                  _selectedStage < _config.plans.length
+                              ? _config.plans[_selectedStage].length
                               : null,
                         ),
                       ),
@@ -408,6 +435,7 @@ class ProgressScreenState extends State<ProgressScreen> {
                       currentWeight: currentWeight,
                       targetWeight: _targetWeight,
                       weeks: _weeks,
+                      methodologyTitle: _config.title,
                     ),
                     icon: const Icon(Icons.share),
                     label: const Text('Поделиться результатом'),
@@ -425,6 +453,7 @@ class ProgressScreenState extends State<ProgressScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

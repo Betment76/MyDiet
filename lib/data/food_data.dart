@@ -1,4 +1,4 @@
-// Список всех продуктов из книги «Минус размер»
+// Список всех продуктов «Минус размер»
 // Пользователь отмечает то, что ему НЕЛЬЗЯ (аллергия / непереносимость)
 
 class FoodCategory {
@@ -8,7 +8,7 @@ class FoodCategory {
   const FoodCategory({required this.name, required this.items});
 }
 
-/// Все продукты из книги, сгруппированные по категориям
+/// Все продукты, сгруппированные по категориям
 const List<FoodCategory> allFoods = [
   FoodCategory(
     name: '🥩 Мясо',

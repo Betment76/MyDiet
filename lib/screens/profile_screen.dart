@@ -5,10 +5,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:my_diet/screens/food_restrictions_screen.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
 
 /// Экран профиля — дизайн 1:1 из Figma
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onOpenMethodologies;
+
+  const ProfileScreen({super.key, this.onOpenMethodologies});
 
   @override
   State<ProfileScreen> createState() => ProfileScreenState();
@@ -152,19 +155,20 @@ class ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const AppGradientBackground(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final theme = Theme.of(context);
 
-    return SingleChildScrollView(
+    return AppGradientBackground(
+      child: SingleChildScrollView(
       child: Column(
         children: [
-          // Градиент-хедер
           Container(
             width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: ThemeProvider.headerGradient,
-            ),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 16,
               bottom: 16,
@@ -220,29 +224,31 @@ class ProfileScreenState extends State<ProfileScreen> {
                     width: 96,
                     height: 96,
                     decoration: BoxDecoration(
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: const Color(0xFF4CAF50),
+                        color: _bmiColor(),
                         width: 3,
                       ),
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(13),
                       child: SizedBox(
                         width: 96,
                         height: 96,
                         child: _photoFile != null
                             ? Image.file(_photoFile!, fit: BoxFit.cover)
                             : Container(
-                                color: theme.colorScheme.primary,
+                                color: Colors.white,
                                 alignment: Alignment.center,
                                 child: Text(
                                   _name.isNotEmpty
                                       ? _name[0].toUpperCase()
                                       : '?',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: _bmiColor(),
                                     fontSize: 40,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
@@ -286,10 +292,10 @@ class ProfileScreenState extends State<ProfileScreen> {
                   width: 96,
                   height: 96,
                   decoration: BoxDecoration(
-                    color: _bmiColor().withValues(alpha: 0.1),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: _bmiColor().withValues(alpha: 0.3),
+                      color: _bmiColor(),
                       width: 3,
                     ),
                   ),
@@ -328,125 +334,140 @@ class ProfileScreenState extends State<ProfileScreen> {
                 // Параметры
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant,
+                    border: const Border(
+                      left: BorderSide(color: ThemeProvider.orange, width: 6),
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Параметры',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (!_editing)
-                            TextButton.icon(
-                              onPressed: _startEditing,
-                              icon: const Icon(Icons.edit, size: 18),
-                              label: const Text('Изменить'),
-                            )
-                          else
-                            TextButton.icon(
-                              onPressed: _saveEditing,
-                              icon: const Icon(Icons.save, size: 18),
-                              label: const Text('Сохранить'),
-                            ),
-                        ],
-                      ),
-                      const Divider(),
-                      if (_editing) ...[
-                        TextField(
-                          controller: _weightCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Текущий вес (кг)',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _targetCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Целевой вес (кг)',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _heightCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Рост (см)',
-                          ),
-                        ),
-                      ] else ...[
-                        _ParamRow(
-                            label: 'Текущий вес',
-                            value: '${_weight.toStringAsFixed(1)} кг'),
-                        _ParamRow(
-                            label: 'Целевой вес',
-                            value: '${_targetWeight.toStringAsFixed(1)} кг'),
-                        _ParamRow(
-                            label: 'Рост',
-                            value: '${_height.toStringAsFixed(0)} см'),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // О методике
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue.shade700),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'О методике',
+                          Expanded(
+                            child: Text(
+                              'Параметры',
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.w600,
-                                color: Colors.blue.shade700,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Методика основана на поэтапном подходе к снижению '
-                              'веса с акцентом на правильное питание и формирование '
-                              'здоровых привычек.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue.shade700.withValues(alpha: 0.9),
+                          ),
+                          SizedBox(
+                            width: 116,
+                            height: 32,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: _editing
+                                      ? _saveEditing
+                                      : _startEditing,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: ThemeProvider.orange,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 4,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _editing
+                                            ? Icons.save_outlined
+                                            : Icons.edit_outlined,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _editing ? 'Сохранить' : 'Изменить',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: SizedBox(
+                          height: _ParamRow._rowHeight * 3,
+                          child: Column(
+                            children: [
+                              _ParamRow(
+                                label: 'Текущий вес',
+                                value: '${_weight.toStringAsFixed(1)} кг',
+                                editing: _editing,
+                                controller: _weightCtrl,
+                                suffix: 'кг',
+                              ),
+                              _ParamRow(
+                                label: 'Целевой вес',
+                                value:
+                                    '${_targetWeight.toStringAsFixed(1)} кг',
+                                editing: _editing,
+                                controller: _targetCtrl,
+                                suffix: 'кг',
+                              ),
+                              _ParamRow(
+                                label: 'Рост',
+                                value: '${_height.toStringAsFixed(0)} см',
+                                editing: _editing,
+                                controller: _heightCtrl,
+                                suffix: 'см',
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 16),
 
-                // Кнопка «Список запрещённых продуктов»
+                // Выбор методики
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onOpenMethodologies,
+                    icon: const Icon(Icons.auto_stories_outlined, size: 20),
+                    label: const Text('Выбор методики'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ThemeProvider.orange,
+                      side: const BorderSide(
+                        color: ThemeProvider.orange,
+                        width: 1.5,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Кнопка редактирования списка запрещённых продуктов
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -456,8 +477,16 @@ class ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     icon: const Icon(Icons.no_food_outlined, size: 20),
-                    label: const Text('Список запрещённых продуктов'),
+                    label: const Text(
+                      'Редактирование\nсписка запрещённых мне продуктов',
+                      textAlign: TextAlign.center,
+                    ),
                     style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B0000),
+                      side: const BorderSide(
+                        color: Color(0xFF8B0000),
+                        width: 1.5,
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -472,26 +501,119 @@ class ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 }
 
 class _ParamRow extends StatelessWidget {
+  static const _rowHeight = 36.0;
+  static const _fieldBoxWidth = 56.0;
+  static const _fieldHeight = 28.0;
+  static const _suffixSlotWidth = 24.0;
+  static const _valueWidth =
+      _fieldBoxWidth + 4 + _suffixSlotWidth; // 84
+
   final String label;
   final String value;
+  final bool editing;
+  final TextEditingController? controller;
+  final String? suffix;
 
-  const _ParamRow({required this.label, required this.value});
+  const _ParamRow({
+    required this.label,
+    required this.value,
+    this.editing = false,
+    this.controller,
+    this.suffix,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    final valueStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+      height: 1.2,
+    );
+
+    return SizedBox(
+      height: _rowHeight,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: _valueWidth,
+            height: _rowHeight,
+            child: editing && controller != null
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        width: _fieldBoxWidth,
+                        height: _fieldHeight,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0x20FF9800),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: const Color(0x40FF9800),
+                          ),
+                        ),
+                        child: TextField(
+                          controller: controller,
+                          maxLines: 1,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          textAlign: TextAlign.center,
+                          style: valueStyle,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            isCollapsed: true,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: _suffixSlotWidth,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            suffix ?? '',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: valueStyle,
+                    ),
+                  ),
+          ),
         ],
       ),
     );

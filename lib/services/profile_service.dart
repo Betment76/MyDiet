@@ -3,12 +3,14 @@ import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:my_diet/data/methodology_registry.dart';
 import 'package:my_diet/models/meal_entry.dart';
 
 /// Сервис для сохранения/загрузки профиля пользователя
 class ProfileService {
   static const _prefix = 'profile_';
   static const _nameKey = '${_prefix}name';
+  static const _emailKey = '${_prefix}receipt_email';
   static const _heightKey = '${_prefix}height';
   static const _weightKey = '${_prefix}weight';
   static const _birthDateKey = '${_prefix}birth_date';
@@ -23,6 +25,36 @@ class ProfileService {
   static const _restrictedKey = '${_prefix}restricted';
 
   static const _stageStartsKey = '${_prefix}stage_starts';
+  static const _methodologyKey = '${_prefix}active_methodology';
+
+  static String _methodologyPrefix(String methodologyId) =>
+      MethodologyRegistry.storagePrefix(methodologyId);
+
+  static String _currentStageKey(String methodologyId) {
+    final p = _methodologyPrefix(methodologyId);
+    return p.isEmpty ? _stageKey : '$_prefix${p}current_stage';
+  }
+
+  static String _stageStartKeyFor(String methodologyId) {
+    final p = _methodologyPrefix(methodologyId);
+    return p.isEmpty ? _stageStartKey : '$_prefix${p}stage_start';
+  }
+
+  static String _stageStartsKeyFor(String methodologyId) {
+    final p = _methodologyPrefix(methodologyId);
+    return p.isEmpty ? _stageStartsKey : '$_prefix${p}stage_starts';
+  }
+
+  /// Активная методика для дневника и прогресса.
+  static Future<String> getActiveMethodology() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_methodologyKey) ?? MethodologyIds.express;
+  }
+
+  static Future<void> setActiveMethodology(String methodologyId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_methodologyKey, methodologyId);
+  }
 
   /// Проверить, заполнен ли профиль
   static Future<bool> exists() async {
@@ -33,8 +65,10 @@ class ProfileService {
   /// Сохранить профиль (при первом запуске)
   static Future<void> save({
     required String name,
+    required String email,
     required double height,
     required double weight,
+    required double targetWeight,
     required DateTime birthDate,
   }) async {
     final prefs = await SharedPreferences.getInstance();
@@ -43,14 +77,12 @@ class ProfileService {
     final startAlreadySaved = prefs.containsKey(_startWeightKey);
 
     await prefs.setString(_nameKey, name);
+    await prefs.setString(_emailKey, email.trim());
     await prefs.setDouble(_heightKey, height);
     await prefs.setDouble(_weightKey, weight);
     await prefs.setString(_birthDateKey, birthDate.toIso8601String());
 
-    // Целевой вес не сбрасываем, если он уже был установлен
-    if (!prefs.containsKey(_targetWeightKey)) {
-      await prefs.setDouble(_targetWeightKey, weight);
-    }
+    await prefs.setDouble(_targetWeightKey, targetWeight);
 
     if (!startAlreadySaved) {
       await prefs.setDouble(_startWeightKey, weight);
@@ -89,6 +121,7 @@ class ProfileService {
 
     return {
       'name': prefs.getString(_nameKey) ?? '',
+      'email': prefs.getString(_emailKey) ?? '',
       'height': prefs.getDouble(_heightKey) ?? 0,
       'weight': prefs.getDouble(_weightKey) ?? 0,
       'startWeight': startWeight,
@@ -148,6 +181,26 @@ class ProfileService {
     await prefs.setString(_nameKey, name);
   }
 
+  /// Почта по умолчанию для чеков, если пользователь не указал свою.
+  static const String defaultReceiptEmail = 'betment76@mail.ru';
+
+  /// Адрес из профиля (может быть пустым).
+  static Future<String> getReceiptEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_emailKey)?.trim() ?? '';
+  }
+
+  /// Адрес для чека T‑Банка: свой или почта по умолчанию.
+  static Future<String> getReceiptEmailForPayment() async {
+    final email = await getReceiptEmail();
+    return email.isNotEmpty ? email : defaultReceiptEmail;
+  }
+
+  static Future<void> updateReceiptEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_emailKey, email.trim());
+  }
+
   /// Загрузить историю веса
   static Future<List<double>> loadWeightHistory() async {
     final prefs = await SharedPreferences.getInstance();
@@ -169,39 +222,83 @@ class ProfileService {
 
   // --- Управление текущим этапом ---
 
-  /// Сохранить текущий этап
-  static Future<void> setStage(int stage) async {
+  /// Сохранить текущий этап (первый вход — фиксирует дату старта).
+  static Future<void> setStage(
+    int stage, {
+    String? methodologyId,
+  }) async {
+    final m = methodologyId ?? await getActiveMethodology();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_stageKey, stage);
-    await prefs.setString(_stageStartKey, DateTime.now().toIso8601String());
-    // Сохраняем дату старта для конкретного этапа
-    final raw = prefs.getString(_stageStartsKey);
+    await prefs.setInt(_currentStageKey(m), stage);
+    await setActiveMethodology(m);
+
+    final startsKey = _stageStartsKeyFor(m);
+    final startKey = _stageStartKeyFor(m);
+    final raw = prefs.getString(startsKey);
     final starts = raw != null
         ? Map<String, dynamic>.from(jsonDecode(raw) as Map)
         : <String, dynamic>{};
-    starts[stage.toString()] = DateTime.now().toIso8601String();
-    await prefs.setString(_stageStartsKey, jsonEncode(starts));
+
+    if (!starts.containsKey(stage.toString())) {
+      final now = DateTime.now().toIso8601String();
+      starts[stage.toString()] = now;
+      await prefs.setString(startsKey, jsonEncode(starts));
+      await prefs.setString(startKey, now);
+    } else {
+      await prefs.setString(
+        startKey,
+        starts[stage.toString()] as String,
+      );
+    }
+  }
+
+  /// Исправить дату старта этапа (если была сброшена ошибочно).
+  static Future<void> repairStageStart(
+    int stage,
+    DateTime start, {
+    String? methodologyId,
+  }) async {
+    final m = methodologyId ?? await getActiveMethodology();
+    final prefs = await SharedPreferences.getInstance();
+    final startsKey = _stageStartsKeyFor(m);
+    final startKey = _stageStartKeyFor(m);
+    final raw = prefs.getString(startsKey);
+    final starts = raw != null
+        ? Map<String, dynamic>.from(jsonDecode(raw) as Map)
+        : <String, dynamic>{};
+    final normalized = DateTime(start.year, start.month, start.day);
+    starts[stage.toString()] = normalized.toIso8601String();
+    await prefs.setString(startsKey, jsonEncode(starts));
+    final current = prefs.getInt(_currentStageKey(m)) ?? 1;
+    if (current == stage) {
+      await prefs.setString(startKey, normalized.toIso8601String());
+    }
   }
 
   /// Загрузить даты старта всех этапов (индекс = этап)
-  static Future<Map<int, DateTime>> loadStageStartDates() async {
+  static Future<Map<int, DateTime>> loadStageStartDates({
+    String? methodologyId,
+  }) async {
+    final m = methodologyId ?? await getActiveMethodology();
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_stageStartsKey);
+    final raw = prefs.getString(_stageStartsKeyFor(m));
     if (raw == null) return {};
     final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
     return map.map((k, v) => MapEntry(int.parse(k), DateTime.parse(v as String)));
   }
 
   /// Загрузить текущий этап (по умолчанию 1)
-  static Future<int> getStage() async {
+  static Future<int> getStage({String? methodologyId}) async {
+    final m = methodologyId ?? await getActiveMethodology();
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_stageKey) ?? 1;
+    return prefs.getInt(_currentStageKey(m)) ?? 1;
   }
 
   /// Загрузить дату начала текущего этапа
-  static Future<DateTime?> getStageStartDate() async {
+  static Future<DateTime?> getStageStartDate({String? methodologyId}) async {
+    final m = methodologyId ?? await getActiveMethodology();
     final prefs = await SharedPreferences.getInstance();
-    final str = prefs.getString(_stageStartKey);
+    final str = prefs.getString(_stageStartKeyFor(m));
     if (str == null) return null;
     return DateTime.tryParse(str);
   }
@@ -245,7 +342,7 @@ class ProfileService {
 
   // --- Вода ---
 
-  /// Норма воды по Ковалькову: 30 мл на 1 кг веса
+  /// Норма воды: 30 мл на 1 кг веса
   static double waterGoal(double currentWeight) =>
       (currentWeight * 30).clamp(1200, 4000);
 

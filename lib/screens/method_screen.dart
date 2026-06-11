@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:my_diet/services/theme_provider.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
 
 /// Экран «О методике» — принципы и правила
 class MethodScreen extends StatelessWidget {
@@ -9,55 +9,21 @@ class MethodScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // Шапка с градиентом
-          SliverAppBar(
-            expandedHeight: 120,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: ThemeProvider.headerGradient,
-                ),
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 16,
-                  left: 20,
-                  right: 20,
-                  bottom: 16,
-                ),
-                alignment: Alignment.bottomLeft,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'О методике',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Обязательно к прочтению',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      backgroundColor: Colors.transparent,
+      body: ExpressGradientBackground(
+        child: Column(
+          children: [
+            const MethodologyFixedHeader(
+              title: 'О методике',
+              subtitle: 'Обязательно к прочтению',
             ),
-          ),
-
-          // Контент
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
                 // Главный блок — без иконки, текст на всю ширину
                 Container(
                   width: double.infinity,
@@ -71,14 +37,14 @@ class MethodScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Об экспресс-методике',
+                        'О диете быстрой',
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Экспресс-диета разработана прежде всего для молодых '
+                        'Диета быстрая разработана прежде всего для молодых '
                         'здоровых людей, не имеющих серьёзных хронических '
                         'заболеваний. Если ваш лишний вес составляет от 5 '
                         'до 10 кг — можете смело приступать. Если килограммов '
@@ -87,7 +53,7 @@ class MethodScreen extends StatelessWidget {
                         'Рассчитана на 1–2 месяца и состоит из трёх '
                         'последовательных этапов: подготовительный (вход в '
                         'кетоз, 2 недели), основной (активное жиросжигание, '
-                        'до 6 недель) и закрепительный (плавный выход, 4+ '
+                        'до 6 недель) и завершающий (плавный выход, 4+ '
                         'недели).\n\n'
                         'Главный принцип — резкое ограничение углеводов (до '
                         '40–60 г/день) при достаточном потреблении белка (до '
@@ -191,7 +157,7 @@ class MethodScreen extends StatelessWidget {
 
                 const SizedBox(height: 32),
 
-                // Противопоказания (из книги)
+                // Противопоказания
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -271,10 +237,14 @@ class MethodScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-              ]),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

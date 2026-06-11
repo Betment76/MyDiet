@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Информация об этапе методики Ковалькова
+/// Информация об этапе методики
 class StageInfo {
   final int number;
   final String title;

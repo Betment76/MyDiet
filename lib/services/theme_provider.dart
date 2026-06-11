@@ -42,6 +42,22 @@ class ThemeProvider extends ChangeNotifier {
     colors: [primaryGreen, primaryLight],
   );
 
+  /// Фон экранов экспресс-методики — зелёный сверху, белый снизу
+  static const LinearGradient expressBackgroundGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [primaryGreen, primaryLight, Colors.white],
+    stops: [0.0, 0.35, 1.0],
+  );
+
+  /// Фон основных экранов приложения — оранжевый сверху, белый снизу
+  static const LinearGradient appBackgroundGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [orange, Color(0xFFFFCC80), Colors.white],
+    stops: [0.0, 0.35, 1.0],
+  );
+
   static final _lightTheme = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(

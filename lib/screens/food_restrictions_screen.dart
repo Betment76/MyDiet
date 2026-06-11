@@ -3,7 +3,7 @@ import 'package:my_diet/data/food_data.dart';
 import 'package:my_diet/screens/plan_loading_screen.dart';
 import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
-import 'package:my_diet/services/theme_provider.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
 
 /// Экран выбора запрещённых продуктов (аллергия / непереносимость)
 /// Категории раскрываются по тапу, продукты — аккуратной сеткой.
@@ -57,18 +57,21 @@ class _FoodRestrictionsScreenState extends State<FoodRestrictionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) {
+      return const Scaffold(
+        body: AppGradientBackground(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
 
     return Scaffold(
-      body: SingleChildScrollView(
+      body: AppGradientBackground(
+        child: SingleChildScrollView(
         child: Column(
           children: [
-            // Градиент-хедер
             Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: ThemeProvider.headerGradient,
-              ),
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top + 40,
                 bottom: 24,
@@ -153,6 +156,7 @@ class _FoodRestrictionsScreenState extends State<FoodRestrictionsScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
