@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:my_diet/services/water_reminder_schedule.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
@@ -21,13 +25,29 @@ class NotificationService {
 
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  bool _timeZoneReady = false;
+
+  static const _notificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'water_channel',
+      'Водный баланс',
+      channelDescription: 'Напоминания выпить воду',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    ),
+  );
 
   /// Инициализация
   Future<void> init() async {
     if (_initialized) return;
 
-    // Инициализируем timezone
-    tz.initializeTimeZones();
+    await _ensureLocalTimeZone();
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -48,8 +68,40 @@ class NotificationService {
     _initialized = true;
   }
 
+  Future<void> _ensureLocalTimeZone() async {
+    if (_timeZoneReady) return;
+    tz.initializeTimeZones();
+    try {
+      final timeZone = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timeZone.identifier));
+    } catch (_) {
+      tz.setLocalLocation(tz.local);
+    }
+    _timeZoneReady = true;
+  }
+
   void _onNotificationResponse(NotificationResponse response) {
     // Пользователь нажал на уведомление — можно показать экран воды
+  }
+
+  /// Перепланировать по сохранённым настройкам (старт приложения / возврат из фона).
+  Future<void> rescheduleFromSavedSettings() async {
+    final settings = await loadSettings();
+    await scheduleWaterReminders(
+      enabled: settings['enabled'] as bool,
+      intervalMinutes: settings['interval'] as int,
+      startHour: settings['startHour'] as int,
+      endHour: settings['endHour'] as int,
+    );
+  }
+
+  Future<bool> _requestPermissionsIfNeeded() async {
+    if (!Platform.isAndroid) return true;
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return true;
+    final granted = await android.requestNotificationsPermission();
+    return granted ?? false;
   }
 
   /// Показать одно уведомление о воде (immediate, без планирования)
@@ -60,27 +112,11 @@ class NotificationService {
   }
 
   Future<void> _show(int id, String title, String body) async {
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'water_channel',
-        'Водный баланс',
-        channelDescription: 'Напоминания выпить воду',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      ),
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-    );
-
-    await _plugin.show(id, title, body, details);
+    await _plugin.show(id, title, body, _notificationDetails);
   }
 
-  /// Запланировать повторяющиеся напоминания на сегодня
-  /// и удалить старые. Вызывать при каждом изменении настроек.
+  /// Запланировать напоминания на ближайшие 7 дней.
+  /// Вызывать при изменении настроек и при старте приложения.
   Future<void> scheduleWaterReminders({
     required bool enabled,
     int intervalMinutes = 60,
@@ -93,62 +129,38 @@ class NotificationService {
     await prefs.setInt(ReminderPrefs.startHour, startHour);
     await prefs.setInt(ReminderPrefs.endHour, endHour);
 
-    if (!enabled) {
-      await cancelAllReminders();
-      return;
-    }
-
-    // Отменяем все старые запланированные
     await cancelAllReminders();
+
+    if (!enabled) return;
+
+    if (!enabledWindow(startHour, endHour, intervalMinutes)) return;
+
+    final permitted = await _requestPermissionsIfNeeded();
+    if (!permitted) return;
 
     await init();
 
-    // Планируем цепочку уведомлений на сегодня
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day, startHour);
-    final todayEnd = DateTime(now.year, now.month, now.day, endHour);
+    final slots = computeWaterReminderSlots(
+      now: DateTime.now(),
+      startHour: startHour,
+      endHour: endHour,
+      intervalMinutes: intervalMinutes,
+    );
+    if (slots.isEmpty) return;
 
-    // ID сдвигаем, чтобы не пересекались
     final baseId = ((prefs.getInt(ReminderPrefs.nextId) ?? 100) ~/ 100) * 100;
     await prefs.setInt(ReminderPrefs.nextId, baseId + 100);
 
-    DateTime next = todayStart;
     var id = baseId;
-
-    while (next.isBefore(todayEnd) || next.isAtSameMomentAs(todayEnd)) {
-      if (next.isAfter(now)) {
-        await _scheduleOne(id, next, intervalMinutes, startHour, endHour);
-        id++;
-      }
-      next = next.add(Duration(minutes: intervalMinutes));
+    for (final slot in slots) {
+      await _scheduleOne(id, slot);
+      id++;
     }
+
+    await prefs.setInt(ReminderPrefs.pendingCount, slots.length);
   }
 
-  /// Запланировать одно уведомление и при его показе —
-  /// перезапланировать следующее на завтра.
-  Future<void> _scheduleOne(
-    int id,
-    DateTime time,
-    int intervalMinutes,
-    int startHour,
-    int endHour,
-  ) async {
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'water_channel',
-        'Водный баланс',
-        channelDescription: 'Напоминания выпить воду',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      ),
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-    );
-
+  Future<void> _scheduleOne(int id, DateTime time) async {
     final scheduledDate = tz.TZDateTime.from(time, tz.local);
 
     await _plugin.zonedSchedule(
@@ -156,9 +168,8 @@ class NotificationService {
       'Пора выпить воды! 💧',
       'Не забывайте о водном балансе — 1,5–2 литра в день',
       scheduledDate,
-      details,
+      _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: null,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
@@ -167,10 +178,8 @@ class NotificationService {
   /// Отменить все запланированные напоминания
   Future<void> cancelAllReminders() async {
     final pending = await _plugin.pendingNotificationRequests();
-    final waterIds = pending
-        .where((r) => r.id >= 100)
-        .map((r) => r.id)
-        .toList();
+    final waterIds =
+        pending.where((r) => r.id >= 100).map((r) => r.id).toList();
     for (final id in waterIds) {
       await _plugin.cancel(id);
     }

@@ -25,6 +25,7 @@ void main() async {
   await YandexAdsService().initialize();
   await AdFreeNotifier.refreshFromPrefs();
   await NotificationService().init();
+  await NotificationService().rescheduleFromSavedSettings();
   await PurchaseVerificationService.verifyAndSyncPurchases();
   await RustoreReviewService.initialize();
 
@@ -73,6 +74,7 @@ class _MyDietAppState extends State<MyDietApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      NotificationService().rescheduleFromSavedSettings();
       PurchaseVerificationService.verifyAndSyncPurchases().then((_) {
         if (mounted) setState(() {});
       });
