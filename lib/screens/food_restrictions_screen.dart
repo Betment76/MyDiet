@@ -32,6 +32,21 @@ class _FoodRestrictionsScreenState extends State<FoodRestrictionsScreen> {
     });
   }
 
+  Future<void> _skipWithoutRestrictions() async {
+    await ProfileService.saveRestricted(const []);
+    await PlanCacheService.invalidate();
+    if (!mounted) return;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const PlanLoadingScreen(),
+        ),
+      );
+    }
+  }
+
   Future<void> _save() async {
     await ProfileService.saveRestricted(_restricted.toList());
     await PlanCacheService.invalidate();
@@ -136,17 +151,7 @@ class _FoodRestrictionsScreenState extends State<FoodRestrictionsScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        } else {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => const PlanLoadingScreen(),
-                            ),
-                          );
-                        }
-                      },
+                      onPressed: _skipWithoutRestrictions,
                       child: const Text('Пропустить, у меня нет ограничений'),
                     ),
                   ),

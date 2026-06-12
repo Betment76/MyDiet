@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:my_diet/data/stage_meal_data.dart';
 import 'package:my_diet/constants/appmetrica_events.dart';
+import 'package:my_diet/data/meal_calories.dart';
 import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/meal_plan_generator.dart';
+import 'package:my_diet/services/meal_progress_service.dart';
 import 'package:my_diet/services/plan_cache_service.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/widgets/common_widgets.dart';
@@ -33,6 +33,7 @@ class DiaryScreenState extends State<DiaryScreen> {
 
   bool _loading = true;
   int _todayCalories = 0;
+  int _dailyCalorieGoal = 0;
   int _checkedCount = 0;
   int _totalMeals = 0;
   int _stageDay = 1;
@@ -114,49 +115,66 @@ class DiaryScreenState extends State<DiaryScreen> {
     int checked = 0;
     int total = 0;
     int mealCount = 0;
+    int dailyGoal = 0;
     int water = 0;
     int walk = 0;
 
-    // Текущий этап
     final methodologyId = await ProfileService.getActiveMethodology();
-    int stageIdx = (await ProfileService.getStage(methodologyId: methodologyId)) - 1;
-    if (stageIdx < 0 || stageIdx >= stagePlans.length) stageIdx = 0;
+    var stageIdx = (await ProfileService.getStage(methodologyId: methodologyId)) - 1;
+    if (stageIdx < 0 || stageIdx > 2) stageIdx = 0;
 
-    final stageStart = await ProfileService.getStageStartDate(methodologyId: methodologyId);
+    final stageStart =
+        await ProfileService.getStageStartDate(methodologyId: methodologyId);
+    final restricted = await ProfileService.loadRestricted();
+    final plan = await PlanCacheService.load(
+          methodologyId,
+          stageIdx,
+          restricted,
+        ) ??
+        generateStagePlan(methodologyId, stageIdx, restricted);
 
-    // Определяем день этапа для выбранной даты
-    if (stageStart != null && stageIdx < stagePlans.length) {
-      final diff = _selectedDate.difference(stageStart).inDays;
+    if (stageStart != null && plan.isNotEmpty) {
+      final diff = MealProgressService.normalizeDate(_selectedDate)
+          .difference(MealProgressService.normalizeDate(stageStart))
+          .inDays;
       mealCount = diff >= 0 ? diff + 1 : 1;
-      if (diff >= 0) {
-        final dayIndex = diff.clamp(0, stagePlans[stageIdx].length - 1);
 
-        // Загружаем план
-        final restricted = await ProfileService.loadRestricted();
-        final plan = await PlanCacheService.load(methodologyId, stageIdx, restricted) ??
-            generateStagePlan(methodologyId, stageIdx, restricted);
+      final planDay = MealProgressService.planDayForCalendarDate(
+        plan: plan,
+        selectedDate: _selectedDate,
+        stageStart: stageStart,
+      );
 
-        if (plan.isNotEmpty && dayIndex < plan.length) {
-          final currentDay = plan[dayIndex];
-          total = currentDay.meals.length;
+      if (planDay != null) {
+        total = planDay.meals.length;
+        dailyGoal = MealCalories.dailyTotal(
+          planDay.meals,
+          methodologyId: methodologyId,
+          stageIndex: stageIdx,
+        );
+      }
 
-          // Загружаем отметки
-          final prefs = await SharedPreferences.getInstance();
-          final key = 'stage_${stageIdx}_progress';
-          final stored = prefs.getString(key);
-          final done = stored != null && stored.isNotEmpty
-              ? Set<String>.from(List<String>.from(jsonDecode(stored)))
-              : <String>{};
+      final done = await MealProgressService.loadDone(
+        stageIdx,
+        methodologyId: methodologyId,
+      );
+      final summary = MealProgressService.summarizeForDate(
+        done: done,
+        stageIndex: stageIdx,
+        selectedDate: _selectedDate,
+        plan: plan,
+        stageStart: stageStart,
+        methodologyId: methodologyId,
+      );
 
-          for (var mi = 0; mi < currentDay.meals.length; mi++) {
-            final meal = currentDay.meals[mi];
-            final mealKey = 'stage${stageIdx}_day_${dayIndex}_meal_$mi';
-            if (done.contains(mealKey)) {
-              totalCal += meal.calories;
-              checked++;
-            }
-          }
-        }
+      if (summary.totalMeals > 0) {
+        checked = summary.checked;
+        total = summary.totalMeals;
+        totalCal = summary.totalCal;
+      } else if (planDay != null) {
+        checked = 0;
+        total = planDay.meals.length;
+        totalCal = 0;
       }
     }
     if (mealCount == 0) mealCount = 1;
@@ -192,6 +210,7 @@ class DiaryScreenState extends State<DiaryScreen> {
     if (mounted) {
       setState(() {
         _todayCalories = totalCal;
+        _dailyCalorieGoal = dailyGoal;
         _checkedCount = checked;
         _totalMeals = total;
         _stageDay = mealCount;
@@ -581,7 +600,9 @@ class DiaryScreenState extends State<DiaryScreen> {
                                 color: Color(0xFFFF5722), size: 28),
                             const SizedBox(width: 8),
                             Text(
-                              '$_todayCalories ккал',
+                              _dailyCalorieGoal > 0
+                                  ? '$_todayCalories / $_dailyCalorieGoal ккал'
+                                  : '$_todayCalories ккал',
                               style: theme.textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
@@ -615,9 +636,12 @@ class DiaryScreenState extends State<DiaryScreen> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
-                            value: _totalMeals > 0
-                                ? _checkedCount / _totalMeals
-                                : 0,
+                            value: _dailyCalorieGoal > 0
+                                ? (_todayCalories / _dailyCalorieGoal)
+                                    .clamp(0.0, 1.0)
+                                : _totalMeals > 0
+                                    ? _checkedCount / _totalMeals
+                                    : 0,
                             minHeight: 6,
                             backgroundColor:
                                 Colors.orange.withValues(alpha: 0.15),

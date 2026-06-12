@@ -251,16 +251,35 @@ class ProgressScreenState extends State<ProgressScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.pie_chart_outline, color: theme.colorScheme.primary),
+                          Icon(
+                            Icons.pie_chart_outline,
+                            color: theme.colorScheme.primary,
+                          ),
                           const SizedBox(width: 8),
-                          Text(
-                            'Прогресс по этапам',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _config.title,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: _config.stageColors.first,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Прогресс по этапам',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const Spacer(),
                           Text(
                             '${(overallPercent * 100).toInt()}%',
                             style: TextStyle(

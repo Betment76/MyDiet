@@ -166,6 +166,20 @@ class MealProgressService {
     return null;
   }
 
+  /// День плана для календарной даты относительно старта этапа.
+  static PrepDay? planDayForCalendarDate({
+    required List<PrepDay> plan,
+    required DateTime selectedDate,
+    required DateTime stageStart,
+  }) {
+    if (plan.isEmpty) return null;
+    final diff = normalizeDate(selectedDate)
+        .difference(normalizeDate(stageStart))
+        .inDays;
+    if (diff < 0) return null;
+    return plan[diff.clamp(0, plan.length - 1)];
+  }
+
   static DateTime? inferStageStartFromProgress(
     int stageIndex,
     Set<String> done, {

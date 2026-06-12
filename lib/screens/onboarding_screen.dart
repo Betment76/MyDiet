@@ -1,7 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:my_diet/services/profile_service.dart';
-import 'package:my_diet/services/theme_provider.dart';
+import 'package:my_diet/constants/appmetrica_events.dart';
 import 'package:my_diet/screens/food_restrictions_screen.dart';
+import 'package:my_diet/services/appmetrica_service.dart';
+import 'package:my_diet/services/backup_service.dart';
+import 'package:my_diet/services/profile_service.dart';
+import 'package:my_diet/utils/ad_free_notifier.dart';
+import 'package:my_diet/services/theme_provider.dart';
+import 'package:my_diet/widgets/common_widgets.dart';
 
 /// Экран первого запуска — дизайн 1:1 из Figma (зелёный фон, белая карточка)
 class OnboardingScreen extends StatefulWidget {
@@ -21,6 +28,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _birthDateCtrl = TextEditingController();
   DateTime? _birthDate;
   bool _saving = false;
+  bool _restoring = false;
   bool _formatting = false;
 
   static const _fieldGap = 8.0;
@@ -113,6 +121,90 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  Future<void> _restoreFromBackup() async {
+    setState(() => _restoring = true);
+    try {
+      final backups = await BackupService.listBackupFiles();
+      if (!mounted) return;
+
+      String? path;
+      if (backups.isNotEmpty) {
+        path = await showAppBottomSheet<String>(
+          context: context,
+          title: 'Резервные копии',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Папка MyDiet_copy',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              ...backups.map((file) {
+                final name = file.path.split(Platform.pathSeparator).last;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.backup_outlined,
+                    color: ThemeProvider.primaryGreen,
+                  ),
+                  title: Text(
+                    name,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  onTap: () => Navigator.pop(context, file.path),
+                );
+              }),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Отмена'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context, '__browse__'),
+              child: const Text('Другой файл…'),
+            ),
+          ],
+        );
+      } else {
+        path = await BackupService.pickBackupFilePath();
+      }
+
+      if (!mounted || path == null) return;
+      if (path == '__browse__') {
+        path = await BackupService.pickBackupFilePath();
+        if (!mounted || path == null) return;
+      }
+
+      final ok = await BackupService.restoreFromPath(path);
+      if (!mounted) return;
+
+      if (ok) {
+        await AdFreeNotifier.refreshFromPrefs();
+        await AppMetricaService.reportEvent(AppMetricaEvents.backupRestored);
+        if (await ProfileService.exists()) {
+          Navigator.of(context).pushReplacementNamed('/home');
+          return;
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? 'Данные восстановлены' : 'Ошибка восстановления',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -125,27 +217,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           gradient: ThemeProvider.appBackgroundGradient,
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: Image.asset(
@@ -314,35 +410,56 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 20),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF9800),
+                            ],
                           ),
-                          onPressed: _saving ? null : _submit,
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Начать',
-                                  style: TextStyle(fontSize: 17),
-                                ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF9800),
+                    ),
+                    onPressed: _saving || _restoring ? null : _submit,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Начать',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: TextButton(
+                    onPressed: _saving || _restoring ? null : _restoreFromBackup,
+                    child: _restoring
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text(
+                            'Восстановить из файла',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

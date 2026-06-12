@@ -5,6 +5,7 @@ import 'package:my_diet/constants/app_links.dart';
 import 'package:my_diet/screens/about_screen.dart';
 import 'package:my_diet/screens/premium_screen.dart';
 import 'package:my_diet/services/backup_service.dart';
+import 'package:my_diet/utils/ad_free_notifier.dart';
 import 'package:my_diet/services/export_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
 import 'package:my_diet/widgets/common_widgets.dart';
@@ -70,6 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
 
     if (ok) {
+      await AdFreeNotifier.refreshFromPrefs();
       await AppMetricaService.reportEvent(AppMetricaEvents.backupRestored);
     }
     ScaffoldMessenger.of(context).showSnackBar(
@@ -238,10 +240,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
+            child: Column(
+              children: [
+                const SizedBox(height: 4),
 
                   // --- Уведомления ---
                   _SettingsCard(
@@ -258,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (_waterReminder) ...[
                         const Divider(height: 1, indent: 16, endIndent: 16),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -273,7 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   }
                                 },
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               _TimeRow(
                                 label: 'Напоминать с',
                                 value: '${_startHour.toString().padLeft(2, '0')}:00',
@@ -286,7 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   }
                                 },
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               _TimeRow(
                                 label: 'Напоминать до',
                                 value: '${_endHour.toString().padLeft(2, '0')}:00',
@@ -326,92 +327,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // --- Действия (ПРЕМИУМ и прочее) ---
                   _SettingsCard(
                     children: [
-                      SizedBox(
-                        height: _kActionsBlockHeight,
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: _SettingsButtonTile(
-                                icon: Icons.workspace_premium,
-                                title: 'Купить ПРЕМИУМ',
-                                fillHeight: true,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const PremiumScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
+                      _CompactActionTile(
+                        icon: Icons.workspace_premium,
+                        title: 'Купить ПРЕМИУМ',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const PremiumScreen(),
                             ),
-                            const Divider(
-                              height: 1,
-                              indent: 16,
-                              endIndent: 16,
+                          );
+                        },
+                      ),
+                      const _SettingsDivider(),
+                      _CompactActionTile(
+                        icon: Icons.refresh,
+                        title: 'Восстановить покупки',
+                        onTap: _showRestorePurchasesDialog,
+                      ),
+                      const _SettingsDivider(),
+                      _CompactActionTile(
+                        icon: Icons.share,
+                        title: 'Поделиться приложением',
+                        onTap: _shareApp,
+                      ),
+                      const _SettingsDivider(),
+                      _CompactActionTile(
+                        icon: Icons.store,
+                        title: 'Все приложения МойСофт.рф',
+                        onTap: _openAllApps,
+                      ),
+                      const _SettingsDivider(),
+                      _CompactActionTile(
+                        icon: Icons.info_outline,
+                        title: 'О приложении',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AboutScreen(),
                             ),
-                            Expanded(
-                              child: _SettingsButtonTile(
-                                icon: Icons.refresh,
-                                title: 'Восстановить покупки',
-                                fillHeight: true,
-                                onTap: _showRestorePurchasesDialog,
-                              ),
-                            ),
-                            const Divider(
-                              height: 1,
-                              indent: 16,
-                              endIndent: 16,
-                            ),
-                            Expanded(
-                              child: _SettingsButtonTile(
-                                icon: Icons.share,
-                                title: 'Поделиться приложением',
-                                fillHeight: true,
-                                onTap: _shareApp,
-                              ),
-                            ),
-                            const Divider(
-                              height: 1,
-                              indent: 16,
-                              endIndent: 16,
-                            ),
-                            Expanded(
-                              child: _SettingsButtonTile(
-                                icon: Icons.store,
-                                title: 'Все приложения МойСофт.рф',
-                                fillHeight: true,
-                                onTap: _openAllApps,
-                              ),
-                            ),
-                            const Divider(
-                              height: 1,
-                              indent: 16,
-                              endIndent: 16,
-                            ),
-                            Expanded(
-                              child: _SettingsButtonTile(
-                                icon: Icons.info_outline,
-                                title: 'О приложении',
-                                fillHeight: true,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const AboutScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 24),
                 ],
               ),
-            ),
           ),
         ],
       ),
@@ -421,11 +381,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 // ─── Внутренние виджеты ────────────────────────────────────────────
 
-const _kSettingsTileHeight = 48.0;
-const _kActionsItemCount = 5;
-const _kActionsDividerCount = 4;
-const _kActionsBlockHeight =
-    (_kSettingsTileHeight * _kActionsItemCount + _kActionsDividerCount) * 1.5;
+class _SettingsDivider extends StatelessWidget {
+  const _SettingsDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(height: 1, indent: 16, endIndent: 16);
+  }
+}
 
 class _SettingsCard extends StatelessWidget {
   final List<Widget> children;
@@ -435,7 +398,7 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E2A27) : const Color(0xFFFAFAFA),
@@ -487,63 +450,58 @@ class _SettingsButtonTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
-  final bool fillHeight;
 
   const _SettingsButtonTile({
     required this.icon,
     required this.title,
     required this.onTap,
-    this.fillHeight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactActionTile(icon: icon, title: title, onTap: onTap);
+  }
+}
+
+class _CompactActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _CompactActionTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final row = Row(
-      children: [
-        Icon(icon, color: ThemeProvider.primaryGreen, size: 22),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          ),
-        ),
-        Icon(
-          Icons.chevron_right,
-          size: 20,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ],
-    );
-
-    if (fillHeight) {
-      return InkWell(
-        onTap: onTap,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: row,
-          ),
-        ),
-      );
-    }
-
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: Icon(icon, color: ThemeProvider.primaryGreen, size: 22),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-      ),
-      trailing: Icon(
-        Icons.chevron_right,
-        size: 20,
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
+    return InkWell(
       onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        child: Row(
+          children: [
+            Icon(icon, color: ThemeProvider.primaryGreen, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

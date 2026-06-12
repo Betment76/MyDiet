@@ -3,7 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Глобальный статус «реклама отключена» (покупка / восстановление).
 class AdFreeNotifier {
-  static const _prefsKey = 'ads_free_purchased';
+  static const prefsKey = 'ads_free_purchased';
+  static const _prefsKey = prefsKey;
 
   static final ValueNotifier<bool> value = ValueNotifier<bool>(false);
 

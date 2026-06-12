@@ -88,7 +88,7 @@ def parse_stage1_day(chunk: str) -> list[dict]:
         bf_note = clean(m.group(1))[:80]
 
     tea = next((t for t in titles if "чай" in t.lower()), None)
-    bf = f"Классический завтрак: йогurt/кефир, орехи, отруби. {bf_note}".strip()
+    bf = f"Классический завтрак: йогурт/кефир, орехи, отруби. {bf_note}".strip()
     if tea:
         bf = f"{tea}. {bf}"[:200]
 

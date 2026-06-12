@@ -6,6 +6,7 @@ import 'package:my_diet/services/appmetrica_service.dart';
 import 'package:my_diet/services/notification_service.dart';
 import 'package:my_diet/services/purchase_verification_service.dart';
 import 'package:my_diet/services/rustore_review_service.dart';
+import 'package:my_diet/services/rustore_update_service.dart';
 import 'package:my_diet/services/yandex_ads_service.dart';
 import 'package:my_diet/utils/ad_free_notifier.dart';
 
@@ -40,6 +41,7 @@ class AppBootstrap {
     await _safe('RuStoreReview', RustoreReviewService.initialize);
     if (disclaimerAccepted) {
       await _safe('AppMetrica', AppMetricaService.initialize);
+      await _safe('RuStoreUpdate', RustoreUpdateService.checkOnStartup);
     }
   }
 

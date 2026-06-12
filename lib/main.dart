@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:my_diet/screens/disclaimer_screen.dart';
 import 'package:my_diet/screens/home_screen.dart';
 import 'package:my_diet/screens/onboarding_screen.dart';
+import 'package:my_diet/navigation/app_navigator.dart';
 import 'package:my_diet/services/app_bootstrap.dart';
 import 'package:my_diet/services/appmetrica_navigator_observer.dart';
 import 'package:my_diet/services/disclaimer_service.dart';
+import 'package:my_diet/services/rustore_update_service.dart';
 import 'package:my_diet/services/notification_service.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/purchase_verification_service.dart';
@@ -69,6 +71,7 @@ class _MyDietAppState extends State<MyDietApp> with WidgetsBindingObserver {
       PurchaseVerificationService.verifyAndSyncPurchases().then((_) {
         if (mounted) setState(() {});
       });
+      RustoreUpdateService.checkOnResume();
     }
   }
 
@@ -87,6 +90,7 @@ class _MyDietAppState extends State<MyDietApp> with WidgetsBindingObserver {
         statusBarIconBrightness: Brightness.light,
       ),
       child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
         title: 'Моя диета',
         debugShowCheckedModeBanner: false,
         theme: themeProvider.theme,

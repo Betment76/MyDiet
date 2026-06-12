@@ -7,6 +7,10 @@ import 'package:my_diet/data/prep_plan_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PlanCacheService {
+  /// Увеличивать при изменении исходных текстов/структуры меню в коде —
+  /// старые ключи SharedPreferences перестанут читаться.
+  static const _dataRevision = '_r2';
+
   /// Сохранить меню для этапа [stageIndex] методики [methodologyId].
   static Future<void> save(
     String methodologyId,
@@ -59,21 +63,44 @@ class PlanCacheService {
       for (var i = 0; i < 3; i++) {
         await prefs.remove(_planKey(id, i));
         await prefs.remove(_hashKey(id, i));
+        // Удаляем устаревшие ключи без ревизии (до _r2 / _v3).
+        await prefs.remove(_legacyPlanKey(id, i));
+        await prefs.remove(_legacyHashKey(id, i));
+        if (id == MethodologyIds.men) {
+          await prefs.remove(_legacyMenPlanKey(i));
+          await prefs.remove(_legacyMenHashKey(i));
+        }
       }
     }
   }
 
   static String _planKey(String methodologyId, int i) {
     final p = MethodologyRegistry.storagePrefix(methodologyId);
-    final v = methodologyId == MethodologyIds.men ? '_v3' : '';
-    return p.isEmpty ? 'cached_plan_$i$v' : '${p}cached_plan_$i$v';
+    return p.isEmpty
+        ? 'cached_plan_$i$_dataRevision'
+        : '${p}cached_plan_$i$_dataRevision';
   }
 
   static String _hashKey(String methodologyId, int i) {
     final p = MethodologyRegistry.storagePrefix(methodologyId);
-    final v = methodologyId == MethodologyIds.men ? '_v3' : '';
-    return p.isEmpty ? 'restrict_hash_$i$v' : '${p}restrict_hash_$i$v';
+    return p.isEmpty
+        ? 'restrict_hash_$i$_dataRevision'
+        : '${p}restrict_hash_$i$_dataRevision';
   }
+
+  static String _legacyPlanKey(String methodologyId, int i) {
+    final p = MethodologyRegistry.storagePrefix(methodologyId);
+    return p.isEmpty ? 'cached_plan_$i' : '${p}cached_plan_$i';
+  }
+
+  static String _legacyHashKey(String methodologyId, int i) {
+    final p = MethodologyRegistry.storagePrefix(methodologyId);
+    return p.isEmpty ? 'restrict_hash_$i' : '${p}restrict_hash_$i';
+  }
+
+  static String _legacyMenPlanKey(int i) => 'men_cached_plan_${i}_v3';
+
+  static String _legacyMenHashKey(int i) => 'men_restrict_hash_${i}_v3';
 
   static String _hash(List<String> list) {
     final sorted = List<String>.from(list)..sort();

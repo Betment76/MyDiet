@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:my_diet/data/legal_documents.dart';
 import 'package:my_diet/services/appmetrica_service.dart';
+import 'package:my_diet/services/rustore_update_service.dart';
 import 'package:my_diet/services/disclaimer_service.dart';
 import 'package:my_diet/services/profile_service.dart';
 import 'package:my_diet/services/theme_provider.dart';
@@ -29,6 +30,7 @@ class _DisclaimerScreenState extends State<DisclaimerScreen> {
     await DisclaimerService.accept();
     await AppMetricaService.initialize();
     await AppMetricaService.reportDisclaimerAccepted();
+    await RustoreUpdateService.checkOnStartup();
 
     if (!mounted) return;
 

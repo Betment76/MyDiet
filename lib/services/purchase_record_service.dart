@@ -88,6 +88,10 @@ class PurchaseRecordService {
     );
   }
 
+  static Future<void> replaceAll(List<PurchaseRecord> records) async {
+    await _saveAll(records);
+  }
+
   static Future<void> add(PurchaseRecord record) async {
     final records = await loadAll();
     records.removeWhere((r) => r.paymentId == record.paymentId);

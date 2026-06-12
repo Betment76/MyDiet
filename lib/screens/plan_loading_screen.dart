@@ -76,6 +76,7 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
 
   Timer? _progressTimer;
   Timer? _tipTimer;
+  Future<void>? _plansFuture;
 
   @override
   void initState() {
@@ -121,10 +122,13 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
       });
     });
 
-    _generateAllPlans();
+    _plansFuture = _generateAllPlans();
   }
 
   Future<void> _generateAllPlans() async {
+    if (!widget.isRegeneration) {
+      await PlanCacheService.invalidate();
+    }
     final restricted = await ProfileService.loadRestricted();
     for (int i = 0; i < 3; i++) {
       for (final id in [MethodologyIds.express, MethodologyIds.gourmets, MethodologyIds.fun, MethodologyIds.men, MethodologyIds.victory]) {
@@ -136,9 +140,12 @@ class _PlanLoadingScreenState extends State<PlanLoadingScreen>
 
   Future<void> _finishLoading() async {
     if (!mounted) return;
+    await _plansFuture;
+    if (!mounted) return;
     await AppMetricaService.reportOnboardingCompleted();
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/home');
+  }
 
   @override
   void dispose() {

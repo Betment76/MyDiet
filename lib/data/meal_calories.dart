@@ -4,6 +4,23 @@ import 'package:my_diet/data/prep_plan_data.dart';
 /// Примерная калорийность приёма по меню выбранной методики.
 /// Оценки по нормам методики (порции, граммы), не по произвольным блюдам.
 abstract final class MealCalories {
+  /// Сумма калорий всех приёмов за день плана.
+  static int dailyTotal(
+    List<PrepMeal> meals, {
+    required String methodologyId,
+    required int stageIndex,
+  }) {
+    var sum = 0;
+    for (final meal in meals) {
+      sum += forMeal(
+        meal,
+        methodologyId: methodologyId,
+        stageIndex: stageIndex,
+      );
+    }
+    return sum;
+  }
+
   static int forMeal(
     PrepMeal meal, {
     required String methodologyId,

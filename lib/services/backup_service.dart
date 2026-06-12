@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:my_diet/services/purchase_backup_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,7 +10,39 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Сохраняет все данные профиля и приложения (SharedPreferences)
 /// в системную папку /Documents/MyDiet_copy/
 class BackupService {
+  BackupService._();
+
   static const _backupDirName = 'MyDiet_copy';
+  static const _backupVersion = 2;
+  static const _preferencesKey = 'preferences';
+  static const _purchaseFlagsKey = 'purchase_flags';
+
+  /// Папка резервных копий `/Documents/MyDiet_copy/`.
+  static Future<Directory> getBackupDirectory() => _getBackupDir();
+
+  /// JSON-файлы резервных копий, новые первыми.
+  static Future<List<File>> listBackupFiles() async {
+    try {
+      final dir = await getBackupDirectory();
+      if (!await dir.exists()) return [];
+
+      final files = <File>[];
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.path.toLowerCase().endsWith('.json')) {
+          files.add(entity);
+        }
+      }
+
+      files.sort((a, b) {
+        final aTime = a.lastModifiedSync();
+        final bTime = b.lastModifiedSync();
+        return bTime.compareTo(aTime);
+      });
+      return files;
+    } catch (_) {
+      return [];
+    }
+  }
 
   /// Получить путь к папке /Documents/MyDiet_copy/
   static Future<Directory> _getBackupDir() async {
@@ -39,23 +72,26 @@ class BackupService {
   static Future<String?> createBackup() async {
     try {
       final dir = await _getBackupDir();
-
-      // Собираем все SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final allKeys = prefs.getKeys().toList();
-      final data = <String, dynamic>{};
-      for (final key in allKeys) {
-        data[key] = prefs.get(key);
+      final preferences = <String, dynamic>{};
+      for (final key in prefs.getKeys()) {
+        preferences[key] = prefs.get(key);
       }
+
+      final data = {
+        'backup_version': _backupVersion,
+        'created_at': DateTime.now().toIso8601String(),
+        _preferencesKey: preferences,
+        _purchaseFlagsKey: await PurchaseBackupService.collectFlags(),
+      };
 
       final timestamp = DateTime.now()
           .toIso8601String()
           .replaceAll(':', '-')
           .substring(0, 19);
 
-      final json = jsonEncode(data);
       final jsonFile = File('${dir.path}/my_diet_backup_$timestamp.json');
-      await jsonFile.writeAsString(json);
+      await jsonFile.writeAsString(jsonEncode(data));
 
       return jsonFile.path;
     } catch (_) {
@@ -63,33 +99,117 @@ class BackupService {
     }
   }
 
+  /// Восстановить данные из файла на диске.
+  static Future<bool> restoreFromPath(String path) async {
+    return restoreFromFile(
+      PlatformFile(
+        path: path,
+        name: path.split(Platform.pathSeparator).last,
+        size: await File(path).length(),
+      ),
+    );
+  }
+
+  /// Выбор файла в папке резервных копий (или в файловом менеджере).
+  static Future<String?> pickBackupFilePath() async {
+    final backupDir = await getBackupDirectory();
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      initialDirectory: backupDir.path,
+      dialogTitle: 'Выберите резервную копию',
+    );
+    if (result == null || result.files.isEmpty) return null;
+    final file = result.files.single;
+    return file.path;
+  }
+
   /// Восстановить данные из файла резервной копии (JSON)
   static Future<bool> restoreFromFile(PlatformFile pickedFile) async {
     try {
-      final bytes = await File(pickedFile.path!).readAsBytes();
+      final path = pickedFile.path;
+      if (path == null || path.isEmpty) return false;
+      final bytes = await File(path).readAsBytes();
       final json = utf8.decode(bytes);
-      final data = jsonDecode(json) as Map<String, dynamic>;
+      final decoded = jsonDecode(json);
 
-      final prefs = await SharedPreferences.getInstance();
-      for (final entry in data.entries) {
-        final key = entry.key;
-        final value = entry.value;
-        if (value is int) {
-          await prefs.setInt(key, value);
-        } else if (value is double) {
-          await prefs.setDouble(key, value);
-        } else if (value is bool) {
-          await prefs.setBool(key, value);
-        } else if (value is String) {
-          await prefs.setString(key, value);
-        } else if (value is List) {
-          // Платформа возвращает List<dynamic>, преобразуем в List<String>
-          await prefs.setStringList(key, value.cast<String>().toList());
-        }
+      if (decoded is Map<String, dynamic> &&
+          decoded.containsKey('backup_version')) {
+        return _restoreStructured(decoded);
       }
-      return true;
+      if (decoded is Map<String, dynamic>) {
+        return _restoreLegacy(decoded);
+      }
+      return false;
     } catch (_) {
       return false;
+    }
+  }
+
+  static Future<bool> _restoreStructured(Map<String, dynamic> data) async {
+    final preferences = data[_preferencesKey];
+    if (preferences is! Map) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    await _applyPreferences(prefs, Map<String, dynamic>.from(preferences));
+
+    final flags = data[_purchaseFlagsKey];
+    if (flags is Map<String, dynamic>) {
+      await PurchaseBackupService.applyFlags(flags);
+    } else if (flags is Map) {
+      await PurchaseBackupService.applyFlags(Map<String, dynamic>.from(flags));
+    }
+
+    return true;
+  }
+
+  static Future<bool> _restoreLegacy(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    await _applyPreferences(prefs, data);
+
+    final flags = await PurchaseBackupService.collectFlags();
+    await PurchaseBackupService.applyFlags(flags);
+    return true;
+  }
+
+  static Future<void> _applyPreferences(
+    SharedPreferences prefs,
+    Map<String, dynamic> data,
+  ) async {
+    for (final entry in data.entries) {
+      await _setPreference(prefs, entry.key, entry.value);
+    }
+  }
+
+  static Future<void> _setPreference(
+    SharedPreferences prefs,
+    String key,
+    Object? value,
+  ) async {
+    if (value == null) return;
+
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is double) {
+      await prefs.setDouble(key, value);
+    } else if (value is num) {
+      final number = value.toDouble();
+      if (number == number.roundToDouble()) {
+        await prefs.setInt(key, number.toInt());
+      } else {
+        await prefs.setDouble(key, number);
+      }
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    } else if (value is List) {
+      await prefs.setStringList(
+        key,
+        value.map((e) => e.toString()).toList(),
+      );
     }
   }
 }
