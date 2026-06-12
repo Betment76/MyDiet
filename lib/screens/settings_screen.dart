@@ -131,13 +131,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _schedule({int? interval, int? start, int? end}) {
-    NotificationService().scheduleWaterReminders(
-      enabled: _waterReminder,
+  Future<void> _schedule({
+    int? interval,
+    int? start,
+    int? end,
+    bool requestPermissionPrompt = false,
+  }) async {
+    final enabled = _waterReminder;
+    final ok = await NotificationService().scheduleWaterReminders(
+      enabled: enabled,
       intervalMinutes: interval ?? _waterInterval,
       startHour: start ?? _startHour,
       endHour: end ?? _endHour,
+      requestPermissionPrompt: requestPermissionPrompt,
     );
+    if (!mounted) return;
+    if (enabled && !ok) {
+      setState(() => _waterReminder = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Не удалось включить напоминания. Разрешите уведомления '
+            'и точные будильники для приложения в настройках телефона.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _showRestorePurchasesDialog() async {
@@ -251,9 +270,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Icons.notifications_outlined,
                         title: 'Напоминания о воде',
                         value: _waterReminder,
-                        onChanged: (val) {
-                          setState(() => _waterReminder = val);
-                          _schedule();
+                        onChanged: (val) async {
+                          if (!val) {
+                            setState(() => _waterReminder = false);
+                            await _schedule();
+                            return;
+                          }
+                          setState(() => _waterReminder = true);
+                          await _schedule(requestPermissionPrompt: true);
                         },
                       ),
                       if (_waterReminder) ...[

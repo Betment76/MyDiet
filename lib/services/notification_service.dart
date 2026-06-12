@@ -85,9 +85,9 @@ class NotificationService {
   }
 
   /// Перепланировать по сохранённым настройкам (старт приложения / возврат из фона).
-  Future<void> rescheduleFromSavedSettings() async {
+  Future<bool> rescheduleFromSavedSettings() async {
     final settings = await loadSettings();
-    await scheduleWaterReminders(
+    return scheduleWaterReminders(
       enabled: settings['enabled'] as bool,
       intervalMinutes: settings['interval'] as int,
       startHour: settings['startHour'] as int,
@@ -95,13 +95,66 @@ class NotificationService {
     );
   }
 
-  Future<bool> _requestPermissionsIfNeeded() async {
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  /// Запрос разрешений на уведомления.
+  /// [prompt] — при включении тумблера: всегда вызвать системный диалог Android 13+.
+  Future<bool> requestPermissionsForReminders({bool prompt = false}) async {
+    await init();
+
     if (!Platform.isAndroid) return true;
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+
+    final android = _android;
     if (android == null) return true;
-    final granted = await android.requestNotificationsPermission();
-    return granted ?? false;
+
+    if (prompt) {
+      await android.requestNotificationsPermission();
+    } else {
+      final alreadyEnabled = await android.areNotificationsEnabled();
+      if (alreadyEnabled != true) {
+        await android.requestNotificationsPermission();
+      }
+    }
+
+    final enabled = await android.areNotificationsEnabled();
+    if (enabled == false) return false;
+    // null на Android < 13 — разрешение не требуется.
+    return true;
+  }
+
+  Future<bool> _ensureAndroidNotificationPermission({bool prompt = false}) =>
+      requestPermissionsForReminders(prompt: prompt);
+
+  Future<bool> _ensureExactAlarmPermissionIfNeeded() async {
+    if (!Platform.isAndroid) return true;
+
+    final android = _android;
+    if (android == null) return true;
+
+    final canSchedule = await android.canScheduleExactNotifications();
+    if (canSchedule == true) return true;
+
+    await android.requestExactAlarmsPermission();
+    final afterRequest = await android.canScheduleExactNotifications();
+    return afterRequest ?? false;
+  }
+
+  Future<AndroidScheduleMode> _androidScheduleMode() async {
+    if (!Platform.isAndroid) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    final android = _android;
+    if (android == null) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    final canExact = await android.canScheduleExactNotifications();
+    return canExact == true
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   /// Показать одно уведомление о воде (immediate, без планирования)
@@ -116,29 +169,36 @@ class NotificationService {
   }
 
   /// Запланировать напоминания на ближайшие 7 дней.
-  /// Вызывать при изменении настроек и при старте приложения.
-  Future<void> scheduleWaterReminders({
+  /// Возвращает false, если включено, но запланировать не удалось (нет разрешений и т.п.).
+  Future<bool> scheduleWaterReminders({
     required bool enabled,
     int intervalMinutes = 60,
     int startHour = 8,
     int endHour = 22,
+    bool requestPermissionPrompt = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(ReminderPrefs.enabled, enabled);
-    await prefs.setInt(ReminderPrefs.interval, intervalMinutes);
-    await prefs.setInt(ReminderPrefs.startHour, startHour);
-    await prefs.setInt(ReminderPrefs.endHour, endHour);
 
     await cancelAllReminders();
 
-    if (!enabled) return;
+    if (!enabled) {
+      await prefs.setBool(ReminderPrefs.enabled, false);
+      return true;
+    }
 
-    if (!enabledWindow(startHour, endHour, intervalMinutes)) return;
+    if (!enabledWindow(startHour, endHour, intervalMinutes)) {
+      await prefs.setBool(ReminderPrefs.enabled, false);
+      return false;
+    }
 
-    final permitted = await _requestPermissionsIfNeeded();
-    if (!permitted) return;
+    if (!await _ensureAndroidNotificationPermission(
+      prompt: requestPermissionPrompt,
+    )) {
+      await prefs.setBool(ReminderPrefs.enabled, false);
+      return false;
+    }
 
-    await init();
+    await _ensureExactAlarmPermissionIfNeeded();
 
     final slots = computeWaterReminderSlots(
       now: DateTime.now(),
@@ -146,21 +206,34 @@ class NotificationService {
       endHour: endHour,
       intervalMinutes: intervalMinutes,
     );
-    if (slots.isEmpty) return;
+    if (slots.isEmpty) {
+      await prefs.setBool(ReminderPrefs.enabled, false);
+      return false;
+    }
 
+    final scheduleMode = await _androidScheduleMode();
     final baseId = ((prefs.getInt(ReminderPrefs.nextId) ?? 100) ~/ 100) * 100;
     await prefs.setInt(ReminderPrefs.nextId, baseId + 100);
 
     var id = baseId;
     for (final slot in slots) {
-      await _scheduleOne(id, slot);
+      await _scheduleOne(id, slot, scheduleMode);
       id++;
     }
 
+    await prefs.setBool(ReminderPrefs.enabled, true);
+    await prefs.setInt(ReminderPrefs.interval, intervalMinutes);
+    await prefs.setInt(ReminderPrefs.startHour, startHour);
+    await prefs.setInt(ReminderPrefs.endHour, endHour);
     await prefs.setInt(ReminderPrefs.pendingCount, slots.length);
+    return true;
   }
 
-  Future<void> _scheduleOne(int id, DateTime time) async {
+  Future<void> _scheduleOne(
+    int id,
+    DateTime time,
+    AndroidScheduleMode scheduleMode,
+  ) async {
     final scheduledDate = tz.TZDateTime.from(time, tz.local);
 
     await _plugin.zonedSchedule(
@@ -169,7 +242,7 @@ class NotificationService {
       'Не забывайте о водном балансе — 1,5–2 литра в день',
       scheduledDate,
       _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: scheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
