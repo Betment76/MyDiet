@@ -15,6 +15,8 @@ class ReminderPrefs {
   static const endHour = 'water_reminder_end_hour';
   static const nextId = 'next_notification_id';
   static const pendingCount = 'pending_reminders_count';
+  static const lastBaseId = 'water_reminder_last_base_id';
+  static const lastCount = 'water_reminder_last_count';
 }
 
 /// Сервис локальных уведомлений для напоминаний о воде
@@ -183,6 +185,9 @@ class NotificationService {
 
     if (!enabled) {
       await prefs.setBool(ReminderPrefs.enabled, false);
+      await prefs.setInt(ReminderPrefs.pendingCount, 0);
+      await prefs.remove(ReminderPrefs.lastBaseId);
+      await prefs.remove(ReminderPrefs.lastCount);
       return true;
     }
 
@@ -226,6 +231,8 @@ class NotificationService {
     await prefs.setInt(ReminderPrefs.startHour, startHour);
     await prefs.setInt(ReminderPrefs.endHour, endHour);
     await prefs.setInt(ReminderPrefs.pendingCount, slots.length);
+    await prefs.setInt(ReminderPrefs.lastBaseId, baseId);
+    await prefs.setInt(ReminderPrefs.lastCount, slots.length);
     return true;
   }
 
@@ -250,12 +257,30 @@ class NotificationService {
 
   /// Отменить все запланированные напоминания
   Future<void> cancelAllReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    await init();
+
+    // 1) Точный диапазон последнего планирования (если есть)
+    final baseId = prefs.getInt(ReminderPrefs.lastBaseId);
+    final count = prefs.getInt(ReminderPrefs.lastCount);
+    if (baseId != null && count != null && count > 0) {
+      for (var id = baseId; id < baseId + count; id++) {
+        await _plugin.cancel(id);
+      }
+    }
+
+    // 2) Fallback: отменить всё, что похоже на "водные" уведомления (id >= 100)
+    // (нужно для старых версий, где lastBaseId/lastCount ещё не сохранялись)
     final pending = await _plugin.pendingNotificationRequests();
     final waterIds =
         pending.where((r) => r.id >= 100).map((r) => r.id).toList();
     for (final id in waterIds) {
       await _plugin.cancel(id);
     }
+
+    await prefs.setInt(ReminderPrefs.pendingCount, 0);
+    await prefs.remove(ReminderPrefs.lastBaseId);
+    await prefs.remove(ReminderPrefs.lastCount);
   }
 
   /// Загрузить настройки напоминаний
